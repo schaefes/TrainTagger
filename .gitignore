@@ -7,7 +7,15 @@ outputPlots*
 matchingPlots*
 outputSynthesis*
 trainings*
-data/
+*__pycache__*
+condaenv*
+training_data*
+*.npy
+*.test
+hls4ml*
+*adb*
+*.autopilot*
+*JetTaggerNN*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
