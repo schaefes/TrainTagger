@@ -51,7 +51,7 @@ def convert(model, outpath):
 
     #Save config  as json file
     print("Saving default config as config.json ...")
-    with open('config.json', 'w') as fp: json.dump(config, fp)
+    with open('tagger/firmware/config.json', 'w') as fp: json.dump(config, fp)
 
     #Write HLS
     hls_model = hls4ml.converters.convert_from_keras_model(model,
