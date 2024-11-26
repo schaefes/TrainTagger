@@ -143,10 +143,11 @@ emulation-evaluate:
     expire_in: 1 day
 
 pre-upload:
-  tags:
-   - k8s-gpu
-  image:
-   - gitlab-registry.cern.ch/cebrown/docker-images/mamba_jettagger:latest
+  tags: [k8s-gpu]
+  image: gitlab-registry.cern.ch/cebrown/docker-images/mamba_jettagger:latest
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 8Gi
+    KUBERNETES_CPU_REQUEST: 1
   stage: pre-upload
   needs: [emulation-evaluate,synth,train,evaluate]
   dependencies: [emulation-evaluate,synth,train,evaluate]
