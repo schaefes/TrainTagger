@@ -52,7 +52,6 @@ data:
   - mc cp $ARTIFACTS_ALIAS/$ARTIFACTS_BUCKET/$DataDir/$Dataset ./
   - cd ..
   - python tagger/train/train.py --make-data -i data/$Dataset
-  - cd data 
   - tar -cf training_data_$Inputs.tgz training_data
   - mc cp training_data_$Inputs.tgz $ARTIFACTS_ALIAS/$ARTIFACTS_BUCKET/$DataDir
 
