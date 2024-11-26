@@ -130,8 +130,6 @@ emulation-evaluate:
     - cb_vivado
   needs: [emulate,train,synth]
   dependencies: [emulate,train,synth]
-  tags:
-    - cb_vivado
   script:
   - mkdir data
   - cd data
@@ -145,15 +143,15 @@ emulation-evaluate:
     expire_in: 1 day
 
 pre-upload:
-  extends:
-    - .template
-  stage: pre-upload
   tags:
-    - cb_vivado
+   - k8s-gpu
+  image:
+   - gitlab-registry.cern.ch/cebrown/docker-images/mamba_jettagger:latest
+  stage: pre-upload
   needs: [emulation-evaluate,synth,train,evaluate]
   dependencies: [emulation-evaluate,synth,train,evaluate]
-  tags:
-    - cb_vivado
+  before_script:
+    - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
   script:
     - mkdir $Name
     - mv output/baseline/plots/emulation $Name
@@ -165,14 +163,12 @@ pre-upload:
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
     - rm -rf php-plots
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.cern.ch/cms-analysis/general/php-plots.git
-    - pwd
     - export PATH="${PATH}:/builds/ml_l1/php-plots/bin"
-    - pb_copy_index.py TrainTagger/$Name --recursive
-    - pb_pdf_to_png.py TrainTagger/$Name --recursive
+    - pb_deploy_plots.py TrainTagger/$Name TrainTagger/Deploy --recursive --pdf-to-png
     - cd TrainTagger
   artifacts:
     paths:
-      - $Name
+      - Deploy
     expire_in: 1 day
 
 .publish:
@@ -188,21 +184,21 @@ publish-emulationPlots:
   extends: .publish
   needs : [pre-upload]
   variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/$Name/output/baseline/plots/emulation
+    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/output/baseline/plots/emulation
     REMOTE_FOLDER: Emulation_Comparison_Plots
 
 publish-synthesis:
   extends: .publish
   needs : [pre-upload]
   variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/$Name/tagger/firmware
+    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/tagger/firmware
     REMOTE_FOLDER: Synthesis_Output
 
 publish-modelfiles:
   extends: .publish
   needs : [pre-upload]
   variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/$Name/baseline/model
+    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/baseline/model
     REMOTE_FOLDER: Model_Files
 
 # publish-evaluationPlots:
@@ -216,5 +212,5 @@ publish-inputPlots:
   extends: .publish
   needs : [pre-upload]
   variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/$Name/plots/training
+    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/plots/training
     REMOTE_FOLDER: Training_Plots
