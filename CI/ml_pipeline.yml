@@ -12,9 +12,8 @@ stages:
   - synth
   - emulate
   - emulation-evaluate
-  - pre-upload
   - upload
-   
+
 variables:
     Name:  baseline_4_params
     Model: DeepSet
@@ -41,10 +40,10 @@ data:
   extends:
     - .template
   stage: data
-  #rules:
-  #   - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
-  #       - datatools/**
-  #when: manual
+  rules:
+     - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
+         - datatools/**
+  when: manual
   script:
   - source activate tagger
   - mkdir data
@@ -142,13 +141,13 @@ emulation-evaluate:
       - output/baseline
     expire_in: 1 day
 
-pre-upload:
+upload:
   tags: [k8s-gpu]
   image: gitlab-registry.cern.ch/cebrown/docker-images/mamba_jettagger:latest
   variables:
     KUBERNETES_MEMORY_REQUEST: 8Gi
     KUBERNETES_CPU_REQUEST: 1
-  stage: pre-upload
+  stage: upload
   needs: [emulation-evaluate,synth,train,evaluate]
   dependencies: [emulation-evaluate,synth,train,evaluate]
   before_script:
@@ -165,43 +164,41 @@ pre-upload:
     - rm -rf php-plots
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.cern.ch/cms-analysis/general/php-plots.git
     - export PATH="${PATH}:/builds/ml_l1/php-plots/bin"
-    - pb_deploy_plots.py TrainTagger/$Name TrainTagger/Deploy --recursive --pdf-to-png
-    - cd TrainTagger
-    - ls /eos/user/c/cebrown/
+    - pb_deploy_plots.py TrainTagger/${Name} /eos/user/c/cebrown/www/JetTagging/${CI_PROJECT_NAME}/${Name}/${CI_COMMIT_REF_NAME} --recursive --pdf-to-png
   artifacts:
     paths:
       - Deploy
     expire_in: 1 day
 
-.publish:
-  extends: .auto_devops_upload_eos_template
-  image: gitlab-registry.cern.ch/cms-cactus/ops/auto-devops/eos:tag-0.4.1
-  stage: upload
-  tags: [ k8s-cvmfs ]
-  needs : [pre-upload]
-  variables:
-    CERNBOX_FOLDER:  /eos/user/c/cebrown/www/JetTagging/${CI_PROJECT_NAME}/${Name}/${REMOTE_FOLDER}
+# .publish:
+#   extends: .auto_devops_upload_eos_template
+#   image: gitlab-registry.cern.ch/cms-cactus/ops/auto-devops/eos:tag-0.4.1
+#   stage: upload
+#   tags: [ k8s-cvmfs ]
+#   needs : [pre-upload]
+#   variables:
+#     CERNBOX_FOLDER:  /eos/user/c/cebrown/www/JetTagging/${CI_PROJECT_NAME}/${Name}/${REMOTE_FOLDER}
 
-publish-emulationPlots:
-  extends: .publish
-  needs : [pre-upload]
-  variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/plots/emulation
-    REMOTE_FOLDER: Emulation_Comparison_Plots
+# publish-emulationPlots:
+#   extends: .publish
+#   needs : [pre-upload]
+#   variables:
+#     LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/plots/emulation
+#     REMOTE_FOLDER: Emulation_Comparison_Plots
 
-publish-synthesis:
-  extends: .publish
-  needs : [pre-upload]
-  variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/firmware
-    REMOTE_FOLDER: Synthesis_Output
+# publish-synthesis:
+#   extends: .publish
+#   needs : [pre-upload]
+#   variables:
+#     LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/firmware
+#     REMOTE_FOLDER: Synthesis_Output
 
-publish-modelfiles:
-  extends: .publish
-  needs : [pre-upload]
-  variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/model
-    REMOTE_FOLDER: Model_Files
+# publish-modelfiles:
+#   extends: .publish
+#   needs : [pre-upload]
+#   variables:
+#     LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/model
+#     REMOTE_FOLDER: Model_Files
 
 # publish-evaluationPlots:
 #   extends: .publish
@@ -210,9 +207,9 @@ publish-modelfiles:
 #     LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/plots/testing
 #     REMOTE_FOLDER: Evaluation_Plots
 
-publish-inputPlots:
-  extends: .publish
-  needs : [pre-upload]
-  variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/plots/training
-    REMOTE_FOLDER: Training_Plots
+# publish-inputPlots:
+#   extends: .publish
+#   needs : [pre-upload]
+#   variables:
+#     LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/plots/training
+#     REMOTE_FOLDER: Training_Plots
