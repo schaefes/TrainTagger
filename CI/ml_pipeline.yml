@@ -72,6 +72,7 @@ train:
   - mv *.npy testing_data
   - tar -cf testing_data_$Inputs.tgz testing_data
   - mc cp testing_data_$Inputs.tgz $ARTIFACTS_ALIAS/$ARTIFACTS_BUCKET/$DataDir
+  - rm *.npy
   artifacts:
     paths:
       - output
@@ -154,9 +155,9 @@ upload:
     - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
   script:
     - mkdir $Name
-    - mv output/baseline/plots/emulation $Name/plots
     - mv tagger/firmware $Name
     - mv output/baseline/model $Name/model
+    - mv output/baseline/plots/emulation $Name/plots
     - mv output/baseline/plots/training/ $Name/plots
     #- mv output/baseline/plots/testing/ $Name/plots
     - cd ..
@@ -164,10 +165,10 @@ upload:
     - rm -rf php-plots
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.cern.ch/cms-analysis/general/php-plots.git
     - export PATH="${PATH}:/builds/ml_l1/php-plots/bin"
-    - pb_deploy_plots.py TrainTagger/${Name} /eos/user/c/cebrown/www/JetTagging/${CI_PROJECT_NAME}/${Name}/${CI_COMMIT_REF_NAME} --recursive --pdf-to-png
+    - pb_deploy_plots.py TrainTagger/${Name} /eos/user/c/cebrown/www/JetTagging/${CI_PROJECT_NAME}/${Name}/${CI_COMMIT_REF_NAME} --recursive --pdf-to-png --extensions h5,cpp,h,yml,tcl,sh, 
   artifacts:
     paths:
-      - Deploy
+      - $Name
     expire_in: 1 day
 
 # .publish:
