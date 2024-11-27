@@ -72,7 +72,6 @@ train:
   - mv *.npy testing_data
   - tar -cf testing_data_$Inputs.tgz testing_data
   - mc cp testing_data_$Inputs.tgz $ARTIFACTS_ALIAS/$ARTIFACTS_BUCKET/$DataDir
-  - rm *.npy
   artifacts:
     paths:
       - output
