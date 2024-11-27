@@ -155,11 +155,11 @@ pre-upload:
     - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
   script:
     - mkdir $Name
-    - mv output/baseline/plots/emulation $Name
+    - mv output/baseline/plots/emulation $Name/plots
     - mv tagger/firmware $Name
-    - mv output/baseline/model $Name
-    - mv output/baseline/plots/training/ $Name
-    #- mv output/baseline/plots/testing/ $Name
+    - mv output/baseline/model $Name/model
+    - mv output/baseline/plots/training/ $Name/plots
+    #- mv output/baseline/plots/testing/ $Name/plots
     - cd ..
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
     - rm -rf php-plots
@@ -167,6 +167,7 @@ pre-upload:
     - export PATH="${PATH}:/builds/ml_l1/php-plots/bin"
     - pb_deploy_plots.py TrainTagger/$Name TrainTagger/Deploy --recursive --pdf-to-png
     - cd TrainTagger
+    - ls /eos/user/c/cebrown/
   artifacts:
     paths:
       - Deploy
@@ -185,33 +186,33 @@ publish-emulationPlots:
   extends: .publish
   needs : [pre-upload]
   variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/output/baseline/plots/emulation
+    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/plots/emulation
     REMOTE_FOLDER: Emulation_Comparison_Plots
 
 publish-synthesis:
   extends: .publish
   needs : [pre-upload]
   variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/tagger/firmware
+    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/firmware
     REMOTE_FOLDER: Synthesis_Output
 
 publish-modelfiles:
   extends: .publish
   needs : [pre-upload]
   variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/baseline/model
+    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/model
     REMOTE_FOLDER: Model_Files
 
 # publish-evaluationPlots:
 #   extends: .publish
 #   needs : [pre-upload]
 #   variables:
-#     LOCAL_FOLDER: ${CI_PROJECT_DIR}/$Name/baseline/plots/testing
+#     LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/plots/testing
 #     REMOTE_FOLDER: Evaluation_Plots
 
 publish-inputPlots:
   extends: .publish
   needs : [pre-upload]
   variables:
-    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/plots/training
+    LOCAL_FOLDER: ${CI_PROJECT_DIR}/Deploy/$Name/plots/training
     REMOTE_FOLDER: Training_Plots
