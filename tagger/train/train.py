@@ -54,7 +54,7 @@ def train(out_dir, percent, model_name):
 
     #Load the data, class_labels and input variables name
     #not really using input variable names to be honest
-    data_train, data_test, class_labels, input_vars = load_data("training_data/", percentage=percent)
+    data_train, data_test, class_labels, input_vars, _ = load_data("training_data/", percentage=percent)
 
     #Make into ML-like data for training
     X_train, y_train, pt_target_train, truth_pt_train = to_ML(data_train, class_labels)
@@ -85,12 +85,12 @@ def train(out_dir, percent, model_name):
     #Export the model
     model_export = tfmot.sparsity.keras.strip_pruning(pruned_model)
 
-    export_path = os.path.join(out_dir, "saved_model.h5")
+    export_path = os.path.join(out_dir, "model/saved_model.h5")
     model_export.save(export_path)
     print(f"Model saved to {export_path}")
 
     #Produce some basic plots with the training for diagnostics
-    plot_path = os.path.join(out_dir, "plots")
+    plot_path = os.path.join(out_dir, "plots/training")
     os.makedirs(plot_path, exist_ok=True)
 
     #Plot history
@@ -106,7 +106,6 @@ def train(out_dir, percent, model_name):
 
     print(f"Test data saved to {out_dir}")
 
-
     return
 
 if __name__ == "__main__":
@@ -117,6 +116,7 @@ if __name__ == "__main__":
     parser.add_argument('--make-data', action='store_true', help='Prepare the data if set.')
     parser.add_argument('-i','--input', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/baselineTRK_4param_021024/All200.root' , help = 'Path to input training data')
     parser.add_argument('-s','--step', default='100MB' , help = 'The maximum memory size to process input root file')
+    parser.add_argument('-e','--extras', default='extra_fields', help= 'Which extra fields to add to output tuples, defined in pfcand_fields.yml')
 
     #Training argument
     parser.add_argument('-o','--output', default='output/baseline', help = 'Output model directory path, also save evaluation plots')
@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
     #Either make data or start the training
     if args.make_data:
-        make_data(infile=args.input, step_size=args.step) #Write to training_data/, can be specified using outdir, but keeping it simple here for now
+        make_data(infile=args.input, step_size=args.step, extras=args.extras) #Write to training_data/, can be specified using outdir, but keeping it simple here for now
     elif args.plot_basic:
         model_dir = args.output
         

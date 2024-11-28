@@ -39,7 +39,7 @@ def basic_ROC(model_dir):
     X_test = np.load(f"{model_dir}/X_test.npy")
     y_test = np.load(f"{model_dir}/y_test.npy")
     
-    model = load_qmodel(f"{model_dir}/saved_model.h5")
+    model = load_qmodel(f"{model_dir}/model/saved_model.h5")
 
 
     return
