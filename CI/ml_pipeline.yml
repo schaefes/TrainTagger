@@ -12,6 +12,7 @@ stages:
   - synth
   - emulate
   - emulation-evaluate
+  - profile
   - upload
 
 variables:
@@ -126,7 +127,6 @@ synth:
       - tagger/firmware
     expire_in: 1 day
 
-
 emulation-evaluate:
   extends:
     - .template
@@ -147,6 +147,35 @@ emulation-evaluate:
       - output/baseline
     expire_in: 1 day
 
+profile:
+  extends:
+    - .template
+  stage: profile
+  tags:
+    - cb_vivado
+  needs: [emulate,train,synth]
+  dependencies: [emulate,train,synth]
+  script:
+  - source /opt/Xilinx/Vivado/2022.2/settings64.sh
+  - export PATH="/externalopt/modelsim/2019.2/modeltech/bin/:$PATH"
+  - export LD_LIBRARY_PATH=/externalopt/cactus/lib:$LD_LIBRARY_PATH
+  - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
+  - source activate tagger
+  - mkdir data
+  - cd data
+  - cp ../${CMSSW_VERSION}/src/FastPUPPI/NtupleProducer/python/jetTuple.root .
+  - cd ..
+  - pip uninstall hls4ml -y
+  - git clone https://github.com/CMS-L1T-Jet-Tagging/hls4ml.git -b jet_tagger
+  - cd hls4ml
+  - pip install .[profiling]
+  - cd ..
+  - python tagger/firmware/hls4ml_profile.py -r True
+  artifacts:
+    paths:
+      - output/baseline
+    expire_in: 1 day
+
 upload:
   tags: [k8s-gpu]
   image: gitlab-registry.cern.ch/cebrown/docker-images/mamba_jettagger:latest
@@ -154,8 +183,8 @@ upload:
     KUBERNETES_MEMORY_REQUEST: 8Gi
     KUBERNETES_CPU_REQUEST: 1
   stage: upload
-  needs: [emulation-evaluate,synth,train,evaluate]
-  dependencies: [emulation-evaluate,synth,train,evaluate]
+  needs: [emulation-evaluate,synth,train,evaluate,profile]
+  dependencies: [emulation-evaluate,synth,train,evaluate,profile]
   before_script:
     - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
   script:
@@ -163,8 +192,9 @@ upload:
     - mv tagger/firmware $Name
     - mv output/baseline/model $Name/model
     - mv output/baseline/plots/emulation $Name/plots
+    - mv output/baseline/plots/profile $Name/plots
     - mv output/baseline/plots/training/ $Name/plots
-    #- mv output/baseline/plots/testing/ $Name/plots
+    - mv output/baseline/plots/physics/ $Name/plots
     - cd ..
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
     - rm -rf php-plots
