@@ -1,43 +1,99 @@
 import json
 
 #Third parties
+import shap
 import numpy as np
 from qkeras.utils import load_qmodel
 from sklearn.metrics import roc_curve, auc
 from itertools import combinations
-
-#For plotting
 import matplotlib.pyplot as plt
-import matplotlib.colors as colors
 from matplotlib.pyplot import cm
 import mplhep as hep
-plt.style.use(hep.style.ROOT)
-
-#Plotting default config
-import matplotlib.pylab as pylab
-params = {'legend.fontsize': 'medium',
-         'axes.labelsize': 'x-large',
-         'axes.titlesize':'x-large',
-         'xtick.labelsize':'medium',
-         'ytick.labelsize':'medium'}
-pylab.rcParams.update(params)
+import tensorflow as tf
+import tagger.plot.style as style
 
 import os
 from .common import PT_BINS
+from .common import plot_histo
 from scipy.stats import norm
-import shap
 
-###### DEFINE ALL THE PLOPTTING FUNCTIONS HERE!!!! THEY WILL BE CALLED IN basic() function >>>>>>>
+style.set_style()
+
+###### DEFINE ALL THE PLOTTING FUNCTIONS HERE!!!! THEY WILL BE CALLED IN basic() function >>>>>>>
 def loss_history(plot_dir, history):
-    plt.plot(history.history['loss'], label='Train Loss', linewidth=3)
-    plt.plot(history.history['val_loss'], label='Validation Loss',linewidth=3)
-    plt.ylabel('Loss')
-    plt.xlabel('Epoch')
-    plt.legend(loc='upper right')
+    fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+    hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax, fontsize=style.CMSHEADER_SIZE)
+    ax.plot(history.history['loss'], label='Train Loss', linewidth=style.LINEWIDTH)
+    ax.plot(history.history['val_loss'], label='Validation Loss',linewidth=style.LINEWIDTH)
+    ax.grid(True)
+    ax.set_ylabel('Loss')
+    ax.set_xlabel('Epoch')
+    ax.legend(loc='upper right')
 
     save_path = os.path.join(plot_dir, "loss_history")
-    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
     plt.savefig(f"{save_path}.png", bbox_inches='tight')
+    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+
+def ROC_taus(y_pred, y_test, class_labels, plot_dir):
+    """
+    Plot ROC curves for taus vs jets and leptons
+    """
+
+    save_dir = os.path.join(plot_dir, 'roc_taus')
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Define class label groups
+    tau_indices = [class_labels['taup'], class_labels['taum']]
+    jet_indices = [class_labels[key] for key in ['b', 'charm', 'light', 'gluon']]
+    lepton_indices = [class_labels[key] for key in ['muon', 'electron']]
+
+    #Function to calculate the roc inputs for plotting
+    def compute_roc_inputs(y_pred, y_test, signal_indices, background_indices):
+        """
+        Compute the true labels and scores for ROC curve inputs.
+        """
+        signal_mask = sum(y_test[:, idx] for idx in signal_indices) > 0
+        total_mask = signal_mask | (sum(y_test[:, idx] for idx in background_indices) > 0)
+
+        signal_scores = sum(y_pred[:, idx] for idx in signal_indices)
+        background_scores = sum(y_pred[:, idx] for idx in background_indices)
+        total_scores = signal_scores + background_scores
+
+        return signal_mask[total_mask], (signal_scores / total_scores)[total_mask]
+
+    def plot_roc(y_true, y_score, label, save_path):
+        """
+        Plot and save a single ROC curve.
+        """
+        fpr, tpr, _ = roc_curve(y_true, y_score)
+        roc_auc = auc(fpr, tpr)
+
+        plt.figure(figsize=style.FIGURE_SIZE)
+        hep.cms.label(
+            llabel=style.CMSHEADER_LEFT, 
+            rlabel=style.CMSHEADER_RIGHT, 
+            fontsize=style.CMSHEADER_SIZE
+        )
+        plt.plot(tpr, fpr, label=f'{label} (AUC = {roc_auc:.2f})', linewidth=style.LINEWIDTH)
+        plt.grid(True)
+        plt.xlabel('Signal Efficiency')
+        plt.ylabel('Mistag Rate')
+        plt.yscale('log')
+        plt.ylim(1e-3, 1.1)
+        plt.legend(loc='lower right')
+
+        plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+        plt.savefig(f"{save_path}.png", bbox_inches='tight')
+        plt.close()
+
+    #Plot taus versus jets ROC
+    y_true_taus_vs_jets, y_score_taus_vs_jets = compute_roc_inputs(y_pred, y_test, tau_indices, jet_indices)
+    plot_roc(y_true_taus_vs_jets, y_score_taus_vs_jets, r'$\tau = \tau_{{h}}^{{+}} + \tau_{{h}}^{{-}}$ vs Jets (b, charm, light, gluon)', os.path.join(save_dir, "ROC_taus_vs_jets"))
+
+    #Plot taus versus leptons ROC
+    y_true_taus_vs_leptons, y_score_taus_vs_leptons = compute_roc_inputs(y_pred, y_test, tau_indices, lepton_indices)
+    plot_roc(y_true_taus_vs_leptons, y_score_taus_vs_leptons, r'$\tau = \tau_{{h}}^{{+}} + \tau_{{h}}^{{-}}$ vs Leptons (muon, electron)', os.path.join(save_dir, "ROC_taus_vs_leptons"))
+
 
 def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
     """
@@ -68,17 +124,16 @@ def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
     roc_auc = auc(fpr, tpr)
 
     # Plot the ROC curve
-    plt.figure(figsize=(10, 10))
-    plt.plot(tpr, fpr, label=f'{class_pair[0]} vs {class_pair[1]} (AUC = {roc_auc:.2f})',
+    fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+    hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.CMSHEADER_SIZE)
+    ax.plot(tpr, fpr, label=f'{style.CLASS_LABEL_STYLE[class_pair[0]]} vs {style.CLASS_LABEL_STYLE[class_pair[1]]} (AUC = {roc_auc:.2f})',
              color='blue', linewidth=5)
-    plt.grid(True)
-    plt.ylabel('False Positive Rate')
-    plt.xlabel('True Positive Rate')
-    hep.cms.text("Phase 2 Simulation")
-    hep.cms.lumitext("PU 200 (14 TeV)")
-    plt.legend(loc='lower right')
-    plt.yscale('log')
-    plt.ylim([1e-3, 1.1])
+    ax.grid(True)
+    ax.set_ylabel('Mistag Rate')
+    ax.set_xlabel('Signal Efficiency')
+    ax.legend(loc='lower right')
+    ax.set_yscale('log')
+    ax.set_ylim([1e-3, 1.1])
 
     # Save the plot
     save_path = os.path.join(save_dir, f"ROC_{class_pair[0]}_vs_{class_pair[1]}")
@@ -86,13 +141,13 @@ def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
     plt.savefig(f"{save_path}.png", bbox_inches='tight')
     plt.close()
 
-def ROC(y_pred, y_test, class_labels, plot_dir):
-
+def ROC(y_pred, y_test, class_labels, plot_dir,ROC_dict):
     # Create a colormap for unique colors
     colormap = cm.get_cmap('Set1', len(class_labels))  # Use 'tab10' with enough colors
 
     # Create a plot for ROC curves
-    plt.figure(figsize=(16, 16))
+    fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+    hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax, fontsize=style.CMSHEADER_SIZE)
     for i, class_label in enumerate(class_labels):
 
         # Get true labels and predicted probabilities for the current class
@@ -103,20 +158,23 @@ def ROC(y_pred, y_test, class_labels, plot_dir):
         fpr, tpr, _ = roc_curve(y_true, y_score)
         roc_auc = auc(fpr, tpr)
 
+        ROC_dict[class_label] = roc_auc
         # Plot the ROC curve for the current class
-        plt.plot(tpr, fpr, label=f'{class_label} (AUC = {roc_auc:.2f})',
-                 color=colormap(i), linewidth=5)
+        ax.plot(tpr, fpr, label=f'{style.CLASS_LABEL_STYLE[class_label]} (AUC = {roc_auc:.2f})',
+                 color=colormap(i), linewidth=style.LINEWIDTH)
 
     # Plot formatting
-    plt.grid(True)
-    plt.ylabel('False Positive Rate')
-    plt.xlabel('True Positive Rate')
-    hep.cms.text("Phase 2 Simulation")
-    hep.cms.lumitext("PU 200 (14 TeV)")
-    plt.legend(loc='lower right')
+    ax.grid(True)
+    ax.set_ylabel('Mistag Rate')
+    ax.set_xlabel('Signal Efficiency')
 
-    plt.yscale('log')
-    plt.ylim([1e-3, 1.1])
+    auc_list = [value for key,value in ROC_dict.items()]
+    handles, labels = plt.gca().get_legend_handles_labels()
+    order = np.argsort(auc_list)
+    ax.legend([handles[idx] for idx in order],[labels[idx] for idx in order],loc='upper left',ncol=2,fontsize=style.SMALL_SIZE-3)
+
+    ax.set_yscale('log')
+    ax.set_ylim([1e-3, 1.1])
 
     # Save the plot
     save_path = os.path.join(plot_dir, "basic_ROC")
@@ -124,19 +182,15 @@ def ROC(y_pred, y_test, class_labels, plot_dir):
     plt.savefig(f"{save_path}.png", bbox_inches='tight')
     plt.close()
 
+    return ROC_dict
+
 def pt_correction_hist(pt_ratio, truth_pt_test, reco_pt_test, plot_dir):
     """
     Plot the histograms of truth pt, reconstructed (uncorrected) pt, and corrected pt
     """
 
-    plt.figure(figsize=(16, 16))
-    plt.hist(truth_pt_test, bins = 20, range = (0,300), density=True, histtype = 'step', label = 'Truth', linewidth=5)
-    plt.hist(reco_pt_test, bins = 20, range = (0,300), density=True, histtype = 'step', label = 'Reconstructed', linewidth=5)
-    plt.hist(np.multiply(reco_pt_test,pt_ratio), bins = 20, range = (0,300), density=True, histtype = 'step', label = 'NN Predicted', linewidth=5)
-
-    plt.xlabel(r'$p_T$ [GeV]')
-    plt.ylabel('a.u.')
-    plt.legend()  
+    plot_histo([truth_pt_test,reco_pt_test,np.multiply(reco_pt_test,pt_ratio)],
+                ['Truth','Reconstructed','NN Predicted'],'',r'$p_T$ [GeV]','a.u',range=(0,300))
     save_path = os.path.join(plot_dir, "pt_hist")
     plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
     plt.savefig(f"{save_path}.png", bbox_inches='tight')
@@ -150,13 +204,11 @@ def plot_input_vars(X_test, input_vars, plot_dir):
     os.makedirs(save_dir, exist_ok=True)
 
     for i in range(len(input_vars)):
-        plt.figure(figsize=(16, 16))
-        plt.hist(X_test[:,:,i].flatten(), bins=50, density=True, label=input_vars[i])
-        plt.ylabel('a.u.')
-        plt.legend()  
-
+        plot_histo([X_test[:,:,i].flatten()],
+                [style.INPUT_FEATURE_STYLE[input_vars[i]]],'',style.INPUT_FEATURE_STYLE[input_vars[i]],'a.u',range=(np.min(X_test[:,:,i]),np.max(X_test[:,:,i])))
         save_path = os.path.join(save_dir, input_vars[i])
         plt.savefig(f"{save_path}.png", bbox_inches='tight')
+        plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
         plt.close()
 
 def get_response(truth_pt, reco_pt, pt_ratio):
@@ -211,13 +263,15 @@ def response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_d
     def plot_response(uncorrected_response, regressed_response, uncorrected_errors, regressed_errors, flavor, plot_name):
 
         # Plot the response
-        plt.errorbar(pt_points, uncorrected_response, yerr=uncorrected_errors, fmt='o', label=f"Uncorrected - {flavor}", capsize=4)
-        plt.errorbar(pt_points, regressed_response, yerr=regressed_errors, fmt='o', label=f"Regressed - {flavor}", capsize=4)
+        fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+        hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.CMSHEADER_SIZE)
+        ax.errorbar(pt_points, uncorrected_response, yerr=uncorrected_errors, fmt='o', label=f"Uncorrected - {style.CLASS_LABEL_STYLE[flavor]}", capsize=4,ms=8,elinewidth=3)
+        ax.errorbar(pt_points, regressed_response, yerr=regressed_errors, fmt='o', label=f"Regressed - {style.CLASS_LABEL_STYLE[flavor]}", capsize=4,ms=8,elinewidth=3)
 
-        plt.xlabel(r"Jet $p_T^{Gen}$ [GeV]")
-        plt.ylabel("Response (Reco/Gen)")
-        plt.legend()
-        plt.grid()
+        ax.set_xlabel(r"Jet $p_T^{Gen}$ [GeV]")
+        ax.set_ylabel("Response (Reco/Gen)")
+        ax.legend()
+        ax.grid()
 
         # Save the plot
         save_path = os.path.join(save_dir, plot_name)
@@ -237,6 +291,19 @@ def response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_d
 
         uncorrected_response, regressed_response, uncorrected_errors, regressed_errors = get_response(truth_pt_test[flavor_selection], reco_pt_test[flavor_selection], pt_ratio[flavor_selection])
         plot_response(uncorrected_response, regressed_response, uncorrected_errors, regressed_errors, flavor=flavor, plot_name=f"{flavor}_response")
+    
+    #Taus, jets, leptons rms
+    rms_selection = {
+        'taus': [class_labels['taup'], class_labels['taum']],
+        'jets': [class_labels[key] for key in ['b', 'charm', 'light', 'gluon']],
+        'leptons': [class_labels[key] for key in ['muon', 'electron']]
+    }
+
+    for key in rms_selection.keys():
+        selection = sum(y_test[:, idx] for idx in rms_selection[key]) > 0
+        
+        uncorrected_response, regressed_response, uncorrected_errors, regressed_errors = get_response(truth_pt_test[selection], reco_pt_test[selection], pt_ratio[selection])
+        plot_response(uncorrected_response, regressed_response, uncorrected_errors, regressed_errors, flavor=key, plot_name=f"{key}_response")
 
     return
 
@@ -296,13 +363,15 @@ def rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir):
     def plot_rms(uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err, flavor, plot_name):
 
         # Plot the response
-        plt.errorbar(pt_points, uncorrected_rms, yerr=uncorrected_rms_err, fmt='o', label=r"Uncorrected $\sigma$- {}".format(flavor), capsize=4)
-        plt.errorbar(pt_points, regressed_rms, yerr=regressed_rms_err, fmt='o', label=r"Regressed $\sigma$ - {}".format(flavor), capsize=4)
+        fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+        hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.CMSHEADER_SIZE)
+        ax.errorbar(pt_points, uncorrected_rms, yerr=uncorrected_rms_err, fmt='o', label=r"Uncorrected $\sigma$- {}".format(style.CLASS_LABEL_STYLE[flavor]), capsize=4,ms=8,elinewidth=3)
+        ax.errorbar(pt_points, regressed_rms, yerr=regressed_rms_err, fmt='o', label=r"Regressed $\sigma$ - {}".format(style.CLASS_LABEL_STYLE[flavor]), capsize=4,ms=8,elinewidth=3)
 
-        plt.xlabel(r"Jet $p_T^{Gen}$ [GeV]")
-        plt.ylabel(r"$\sigma_{(p_T^{Gen} - p_T^{Reco})/p_T^{Gen}}$")
-        plt.legend()
-        plt.grid(True)
+        ax.set_xlabel(r"Jet $p_T^{Gen}$ [GeV]")
+        ax.set_ylabel(r"$\sigma_{(p_T^{Gen} - p_T^{Reco})/p_T^{Gen}}$")
+        ax.legend()
+        ax.grid(True)
 
         # Save the plot
         save_path = os.path.join(save_dir, plot_name)
@@ -322,20 +391,97 @@ def rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir):
         uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err = get_rms(truth_pt_test[flavor_selection], reco_pt_test[flavor_selection], pt_ratio[flavor_selection])
         plot_rms(uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err, flavor=flavor, plot_name=f"{flavor}_rms")
 
-    return
-# <<<<<<<<<<<<<<<<< end of plotting functions, call basic to plot all of them
+    #Taus, jets, leptons rms
+    rms_selection = {
+        'taus': [class_labels['taup'], class_labels['taum']],
+        'jets': [class_labels[key] for key in ['b', 'charm', 'light', 'gluon']],
+        'leptons': [class_labels[key] for key in ['muon', 'electron']]
+    }
 
+    for key in rms_selection.keys():
+        selection = sum(y_test[:, idx] for idx in rms_selection[key]) > 0
+
+        uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err = get_rms(truth_pt_test[selection], reco_pt_test[selection], pt_ratio[selection])
+        plot_rms(uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err, flavor=key, plot_name=f"{key}_rms")
+
+    return
+
+def shapPlot(shap_values, feature_names, class_names):
+    fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+    feature_order = np.argsort(np.sum(np.mean(np.abs(shap_values), axis=1), axis=0))
+    num_features = (shap_values[0].shape[1])
+    feature_inds = feature_order
+    y_pos = np.arange(len(feature_inds))
+    left_pos = np.zeros(len(feature_inds))
+
+    axis_color="#333333"
+    class_inds = np.argsort([-np.abs(shap_values[i]).mean() for i in range(len(shap_values))])
+    colormap = cm.get_cmap('Set1', len(class_names))  # Use 'tab10' with enough colors
+
+    for i, ind in enumerate(class_inds):
+        global_shap_values = np.abs(shap_values[ind]).mean(0)
+        label = style.CLASS_LABEL_STYLE[class_names[ind]]
+        ax.barh(y_pos, global_shap_values[feature_inds], 0.7, left=left_pos, align='center',label=label,color=colormap(class_inds[i]))
+        left_pos += global_shap_values[feature_inds]
+
+    #ax.set_yticklabels([style.INPUT_FEATURE_STYLE[feature_names[i]] for i in feature_inds])
+    ax.legend(loc='lower right',fontsize=30)
+
+    ax.xaxis.set_ticks_position('bottom')
+    ax.xaxis.set_ticks_position('none')
+    ax.yaxis.set_ticks_position('none')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.tick_params(color=axis_color, labelcolor=axis_color)
+    ax.set_yticks(range(len(feature_order)), [style.INPUT_FEATURE_STYLE[feature_names[i]] for i in feature_order],fontsize=30)
+    ax.set_xlabel("mean (shapley value) - (average impact on model output magnitude)",fontsize=30)
+    plt.tight_layout()
+
+def plot_shaply(model, X_test, class_labels, input_vars, plot_dir):
+    
+    labels = list(class_labels.keys())
+    model2 = tf.keras.Model(model.input, model.output[0])
+    model3 = tf.keras.Model(model.input, model.output[1])
+
+    for explainer, name  in [(shap.GradientExplainer(model2, X_test[:1000]), "GradientExplainer"), ]:
+        print("... {0}: explainer.shap_values(X)".format(name))
+        shap_values = explainer.shap_values(X_test[:1000])
+        new = np.sum(shap_values, axis = 1)
+        print("... shap summary_plot classification")
+        plt.clf()
+        new = np.transpose(new, (2,0,1))
+        shapPlot(new, input_vars, labels)
+        plt.savefig(plot_dir+"/shap_summary_class.pdf",bbox_inches='tight')
+        plt.savefig(plot_dir+"/shap_summary_class.png",bbox_inches='tight')
+
+    for explainer, name  in [(shap.GradientExplainer(model3, X_test[:1000]), "GradientExplainer"), ]:
+        print("... {0}: explainer.shap_values(X)".format(name))
+        shap_values = explainer.shap_values(X_test[:1000])
+        new = np.sum(shap_values, axis = 1)
+        print("... shap summary_plot regression")
+        plt.clf()
+        labels = ["Regression"]
+        new = np.transpose(new, (2,0,1))
+        shapPlot(new, input_vars, labels)
+        plt.savefig(plot_dir+"/shap_summary_reg.pdf",bbox_inches='tight')
+        plt.savefig(plot_dir+"/shap_summary_reg.png",bbox_inches='tight')
+
+# <<<<<<<<<<<<<<<<< end of plotting functions, call basic to plot all of them
 def basic(model_dir):
     """
     Plot the basic ROCs for different classes. Does not reflect L1 rate
+    Returns a dictionary of ROCs for each class
     """
-
+    
     plot_dir = os.path.join(model_dir, "plots/training")
 
     #Load the metada for class_label
     with open(f"{model_dir}/class_label.json", 'r') as file: class_labels = json.load(file)
     with open(f"{model_dir}/input_vars.json", 'r') as file: input_vars = json.load(file)
 
+    ROC_dict = {class_label : 0 for class_label in class_labels} 
+    
     #Load the testing data
     X_test = np.load(f"{model_dir}/testing_data/X_test.npy")
     y_test = np.load(f"{model_dir}/testing_data/y_test.npy")
@@ -349,16 +495,19 @@ def basic(model_dir):
     #Get classification outputs
     y_pred = model_outputs[0]
     pt_ratio = model_outputs[1].flatten()
-
+    
     #Plot ROC curves
-    ROC(y_pred, y_test, class_labels, plot_dir)
+    ROC_dict = ROC(y_pred, y_test, class_labels, plot_dir,ROC_dict)
 
-    # Generate all possible pairs of classes
+    #Generate all possible pairs of classes
     for i in class_labels.keys():
         for j in class_labels.keys():
             if i != j:
                 class_pair = (i,j)
                 ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair)        
+
+    #ROC for taus versus jets and taus versus leptons
+    ROC_taus(y_pred, y_test, class_labels, plot_dir)
 
     #Plot pt corrections
     pt_correction_hist(pt_ratio, truth_pt_test, reco_pt_test, plot_dir)
@@ -371,5 +520,8 @@ def basic(model_dir):
     
     #Plot the rms of the residuals vs pt
     rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
+    
+    #Plot the shaply feature importance
+    plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
 
-    return
+    return ROC_dict
