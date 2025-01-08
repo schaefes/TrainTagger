@@ -3,7 +3,6 @@ Here all the models are defined to be called in train.py
 """
 import tensorflow as tf
 from tensorflow.keras.layers import BatchNormalization, Input, Activation, GlobalAveragePooling1D, Masking
-import numpy as np
 
 # Qkeras
 from qkeras.quantizers import quantized_bits, quantized_relu
