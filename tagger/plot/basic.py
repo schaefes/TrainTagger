@@ -549,8 +549,6 @@ def kfolds_basic(model_dir, n_folds):
     reco_pt_tests = []
     pt_ratios = []
 
-    from IPython import embed; embed()
-
     # Make predictions for each fold and collect the results
     for f in os.listdir(folds_dir):
         # Load fold data
