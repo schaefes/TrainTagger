@@ -2,8 +2,8 @@ from argparse import ArgumentParser
 import os, shutil, json
 
 #Import from other modules
-from tagger.data.tools import make_data, load_data, to_ML
-from tagger.plot.basic import loss_history, basic
+from tagger.data.tools import make_data, load_data, to_ML, make_kfolds
+from tagger.plot.basic import loss_history, basic, kfolds_basic
 import models
 
 #Third parties
@@ -114,7 +114,7 @@ def train_weights(y_train, truth_pt_train, class_labels, pt_flat_weighting=True)
     # Normalize sample weights
     sample_weights = sample_weights / np.mean(sample_weights)
 
-def train(out_dir, percent, model_name):
+def train(out_dir, percent, model_name, kfold, n_folds):
 
     #Remove output dir if exists
     if os.path.exists(out_dir):
@@ -125,7 +125,7 @@ def train(out_dir, percent, model_name):
     os.makedirs(out_dir)
 
     #Load the data, class_labels and input variables name, not really using input variable names to be honest
-    data_train, data_test, class_labels, input_vars, extra_vars = load_data("training_data/", percentage=percent)
+    data_train, data_test, class_labels, input_vars, extra_vars = load_data("training_data/", percent, kfold, n_folds)
 
     #Save input variables and extra variables metadata
     with open(os.path.join(out_dir, "input_vars.json"), "w") as f: json.dump(input_vars, f, indent=4) #Dump output variables
@@ -145,8 +145,13 @@ def train(out_dir, percent, model_name):
     #Calculate the sample weights for training
     sample_weight = train_weights(y_train, truth_pt_train, class_labels)
 
+<<<<<<< HEAD
     #Get input shape
     input_shape = [X_train.shape[1:], inputs_mask.shape[1:]] #First dimension is batch size
+=======
+    #Get input shape and output shape
+    input_shape = X_train.shape[1:] #First dimension is batch size
+>>>>>>> deefbdcf877f580960807025457fa7ed9ccb9a5e
     output_shape = y_train.shape[1:]
 
     #Dynamically get the model
@@ -197,28 +202,36 @@ if __name__ == "__main__":
 
     #Making input arguments
     parser.add_argument('--make-data', action='store_true', help='Prepare the data if set.')
-    parser.add_argument('-i','--input', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_5param_221124/All200_part0.root' , help = 'Path to input training data')
+    parser.add_argument('--make-kfolds', action='store_true', help='Create kfold indices for given number of folds.')
+    parser.add_argument('-i','--input', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/baselineTRK_4param_021024/All200_part0.root', help = 'Path to input training data')
     parser.add_argument('-r','--ratio', default=1, type=float, help = 'Ratio (0-1) of the input data root file to process')
     parser.add_argument('-s','--step', default='100MB' , help = 'The maximum memory size to process input root file')
     parser.add_argument('-e','--extras', default='extra_fields', help= 'Which extra fields to add to output tuples, defined in pfcand_fields.yml')
-
+    parser.add_argument('-nf','--nfolds', default=5, type=int, help = 'Number of folds to create')
     #Training argument
     parser.add_argument('-o','--output', default='output/baseline', help = 'Output model directory path, also save evaluation plots')
     parser.add_argument('-p','--percent', default=100, type=int, help = 'Percentage of how much processed data to train on')
     parser.add_argument('-m','--model', default='baseline', help = 'Model object name to train on')
     parser.add_argument('-n','--name', default='baseline', help = 'Model experiment name')
+    parser.add_argument('-f', '--kfold', default=0, type=int, help='0: no cross-validation used, >0: fold used for cross-validation')
 
     #Basic ploting
     parser.add_argument('--plot-basic', action='store_true', help='Plot all the basic performance if set')
+    parser.add_argument('--plot-kfolds', action='store_true', help='Plot results of k fold cross validation')
 
     args = parser.parse_args()
+
+    if args.kfold > args.nfolds:
+        raise ValueError("kfold must be less than or equal to nfolds")
 
     mlflow.set_experiment(os.getenv('CI_COMMIT_REF_NAME'))
 
     #Either make data or start the training
     if args.make_data:
         make_data(infile=args.input, step_size=args.step, extras=args.extras, ratio=args.ratio) #Write to training_data/, can be specified using outdir, but keeping it simple here for now
-    elif args.plot_basic:
+    elif args.make_kfolds:
+        make_kfolds(args.nfolds, args.percent)
+    elif args.plot_basic | args.plot_kfolds:
         model_dir = args.output
         f = open("mlflow_run_id.txt", "r")
         run_id = (f.read())
@@ -229,15 +242,20 @@ if __name__ == "__main__":
                             ):
 
             #All the basic plots!
-            results = basic(model_dir)
+            results = basic(model_dir) if args.plot_basic else kfolds_basic(model_dir, args.nfolds)
             for class_label in results.keys():
                 mlflow.log_metric(class_label + ' ROC AUC',results[class_label])
+<<<<<<< HEAD
 
+=======
+>>>>>>> deefbdcf877f580960807025457fa7ed9ccb9a5e
     else:
+        if args.kfold:
+            args.output = os.path.join(f"{args.output}_{args.nfolds}folds", f"fold{args.kfold}of{args.nfolds}")
         with mlflow.start_run(run_name=args.name) as run:
             mlflow.set_tag('gitlab.CI_JOB_ID', os.getenv('CI_JOB_ID'))
             mlflow.keras.autolog()
-            train(args.output, args.percent, model_name=args.model)
+            train(args.output, args.percent, model_name=args.model, kfold=args.kfold, n_folds=args.nfolds)
             run_id = run.info.run_id
         sourceFile = open('mlflow_run_id.txt', 'w')
         print(run_id, end="", file = sourceFile)
