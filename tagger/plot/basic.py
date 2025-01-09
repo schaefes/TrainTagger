@@ -490,7 +490,11 @@ def basic(model_dir):
 
     #Load model
     model = load_qmodel(f"{model_dir}/model/saved_model.h5")
-    model_outputs = model.predict(X_test)
+    try:
+        X_mask = np.load(f"{model_dir}/testing_data/X_mask.npy")
+        model_outputs = model.predict([X_test, X_mask])
+    except:
+        model_outputs = model.predict(X_test)
 
     #Get classification outputs
     y_pred = model_outputs[0]

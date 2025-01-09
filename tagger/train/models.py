@@ -20,7 +20,7 @@ def baseline(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1):
     }
 
     #Initialize inputs
-    inputs = tf.keras.layers.Input(shape=inputs_shape, name='model_input')
+    inputs = tf.keras.layers.Input(shape=inputs_shape[0], name='model_input')
 
     #Main branch
     main = BatchNormalization(name='norm_input')(inputs)
@@ -153,8 +153,7 @@ def baseline_inp_mask(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=
 
     # Linear activation to change HLS bitwidth to fix overflow in AveragePooling
     main = QActivation(activation='quantized_bits(18,8)', name = 'act_pool')(main)
-    main = tf.ragged.boolean_mask(main, inputs_mask, name="ragged_masking")
-    main = GlobalAveragePooling1D(name='avgpool')(main)
+    main = GlobalAveragePooling1D(name='avgpool')(main, mask=inputs_mask)
 
     #Now split into jet ID and pt regression
 
