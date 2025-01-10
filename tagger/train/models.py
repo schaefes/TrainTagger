@@ -2,7 +2,8 @@
 Here all the models are defined to be called in train.py
 """
 import tensorflow as tf
-from tensorflow.keras.layers import BatchNormalization, Input, Activation, GlobalAveragePooling1D, Masking
+from tensorflow.keras.layers import (BatchNormalization, Input, Activation, GlobalAveragePooling1D,
+    Masking, Multiply)
 
 # Qkeras
 from qkeras.quantizers import quantized_bits, quantized_relu
@@ -127,7 +128,7 @@ def baseline_masking(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1
     return model
 
 
-def baseline_inp_mask(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1):
+def baseline_multiply(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1):
 
     # Define a dictionary for common arguments
     common_args = {
@@ -138,10 +139,10 @@ def baseline_inp_mask(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=
 
     #Initialize inputs
     inputs = tf.keras.layers.Input(shape=inputs_shape[0], name='model_input')
-    inputs_mask = tf.keras.layers.Input(shape=inputs_shape[1], dtype=bool, name='mask_input')
+    inputs_mask = tf.keras.layers.Input(shape=inputs_shape[1], name='mask_input')
 
     #Main branch
-    main = BatchNormalization(name='norm_input')(inputs, mask=inputs_mask)
+    main = BatchNormalization(name='norm_input')(inputs)
 
     #First Conv1D
     main = QConv1D(filters=10, kernel_size=1, name='Conv1D_1', **common_args)(main)
@@ -153,7 +154,8 @@ def baseline_inp_mask(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=
 
     # Linear activation to change HLS bitwidth to fix overflow in AveragePooling
     main = QActivation(activation='quantized_bits(18,8)', name = 'act_pool')(main)
-    main = GlobalAveragePooling1D(name='avgpool')(main, mask=inputs_mask)
+    main = Multiply()([main, inputs_mask])
+    main = GlobalAveragePooling1D(name='avgpool')(main)
 
     #Now split into jet ID and pt regression
 
@@ -182,3 +184,4 @@ def baseline_inp_mask(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=
     print(model.summary())
 
     return model
+

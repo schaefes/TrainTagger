@@ -135,23 +135,24 @@ def train(out_dir, percent, model_name, kfold, n_folds):
     X_train, y_train, pt_target_train, truth_pt_train, reco_pt_train = to_ML(data_train, class_labels)
 
     # Create input mask from training data
-    inputs_mask = np.where(np.sum(X_train, axis=2)==0, False, True)
+    inputs_mask = np.where(np.sum(X_train, axis=2)==0, 0, X_train.shape[1])
+    inputs_count = np.sum(np.where(np.sum(X_train, axis=2)==0, 0, 1), axis=1)
+    inputs_mask = inputs_mask / inputs_count[:, np.newaxis] # Normalize using constituents multiplicity
+    inputs_mask = np.repeat(inputs_mask[:, :,np.newaxis], 10, axis=2) # Repeat to match the shape of X_train
 
     #Save X_test, y_test, and truth_pt_test for plotting later
     X_test, y_test, _, truth_pt_test, reco_pt_test = to_ML(data_test, class_labels)
-    X_test_mask = np.where(np.sum(X_test, axis=2)==0, False, True)
+    X_test_mask = np.where(np.sum(X_test, axis=2)==0, 0, X_train.shape[1])
+    X_test_count = np.sum(np.where(np.sum(X_test, axis=2)==0, 0, 1), axis=1)
+    X_test_mask = X_test_mask / X_test_count[:, np.newaxis] # Normalize using constituents multiplicity
+    X_test_mask = np.repeat(X_test_mask[:, :,np.newaxis], 10, axis=2) # Repeat to match the shape of X_test
     save_test_data(out_dir, X_test, X_test_mask, y_test, truth_pt_test, reco_pt_test, class_labels)
 
     #Calculate the sample weights for training
     sample_weight = train_weights(y_train, truth_pt_train, class_labels)
 
-<<<<<<< HEAD
     #Get input shape
     input_shape = [X_train.shape[1:], inputs_mask.shape[1:]] #First dimension is batch size
-=======
-    #Get input shape and output shape
-    input_shape = X_train.shape[1:] #First dimension is batch size
->>>>>>> deefbdcf877f580960807025457fa7ed9ccb9a5e
     output_shape = y_train.shape[1:]
 
     #Dynamically get the model
@@ -203,7 +204,7 @@ if __name__ == "__main__":
     #Making input arguments
     parser.add_argument('--make-data', action='store_true', help='Prepare the data if set.')
     parser.add_argument('--make-kfolds', action='store_true', help='Create kfold indices for given number of folds.')
-    parser.add_argument('-i','--input', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/baselineTRK_4param_021024/All200_part0.root', help = 'Path to input training data')
+    parser.add_argument('-i','--input', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_5param_221124/All200_part0.root', help = 'Path to input training data')
     parser.add_argument('-r','--ratio', default=1, type=float, help = 'Ratio (0-1) of the input data root file to process')
     parser.add_argument('-s','--step', default='100MB' , help = 'The maximum memory size to process input root file')
     parser.add_argument('-e','--extras', default='extra_fields', help= 'Which extra fields to add to output tuples, defined in pfcand_fields.yml')
@@ -245,10 +246,6 @@ if __name__ == "__main__":
             results = basic(model_dir) if args.plot_basic else kfolds_basic(model_dir, args.nfolds)
             for class_label in results.keys():
                 mlflow.log_metric(class_label + ' ROC AUC',results[class_label])
-<<<<<<< HEAD
-
-=======
->>>>>>> deefbdcf877f580960807025457fa7ed9ccb9a5e
     else:
         if args.kfold:
             args.output = os.path.join(f"{args.output}_{args.nfolds}folds", f"fold{args.kfold}of{args.nfolds}")
