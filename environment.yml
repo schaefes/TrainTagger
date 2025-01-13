@@ -1,4 +1,4 @@
-name: tagger
+name: tagger2
 channels:
   - conda-forge
 dependencies:

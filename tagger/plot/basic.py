@@ -516,17 +516,20 @@ def basic(model_dir):
     #Plot pt corrections
     pt_correction_hist(pt_ratio, truth_pt_test, reco_pt_test, plot_dir)
 
-    #Plot input distributions
-    plot_input_vars(X_test, input_vars, plot_dir)
-
     #Plot inclusive response and individual flavor
     response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
 
     #Plot the rms of the residuals vs pt
     rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
 
-    #Plot the shaply feature importance
-    plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
+    try:
+        #Plot the shaply feature importance
+        plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
+
+        #Plot input distributions
+        plot_input_vars(X_test, input_vars, plot_dir)
+    except:
+        None
 
     return ROC_dict
 
@@ -563,7 +566,12 @@ def kfolds_basic(model_dir, n_folds):
 
         #Load model
         model = load_qmodel(f"{folds_dir}/{f}/model/saved_model.h5")
-        y_pred_fold, pt_ratio_fold = model.predict(X_test_fold)
+        try:
+            X_mask_fold = np.load(f"{folds_dir}/{f}/testing_data/X_mask.npy")
+            model_outputs = model.predict([X_test_fold, X_mask_fold])
+        except:
+            model_outputs = model.predict(X_test_fold)
+        y_pred_fold, pt_ratio_fold = model_outputs
 
         # collect predictions and truth labels
         X_tests.append(X_test_fold)
@@ -603,17 +611,20 @@ def kfolds_basic(model_dir, n_folds):
     #Plot pt corrections
     pt_correction_hist(pt_ratio, truth_pt_test, reco_pt_test, plot_dir)
 
-    #Plot input distributions
-    plot_input_vars(X_test, input_vars, plot_dir)
 
     #Plot inclusive response and individual flavor
     response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
 
     #Plot the rms of the residuals vs pt
     rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
+    try:
+        #Plot input distributions
+        plot_input_vars(X_test, input_vars, plot_dir)
 
-    #Plot the shaply feature importance
-    plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
+        #Plot the shaply feature importance
+        plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
+    except:
+        None
 
     return ROC_dict
 
