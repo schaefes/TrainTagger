@@ -11,6 +11,7 @@ from matplotlib.pyplot import cm
 import mplhep as hep
 import tensorflow as tf
 import tagger.plot.style as style
+from tagger.data.tools import load_data, to_ML
 
 import os
 from .common import PT_BINS
@@ -95,7 +96,7 @@ def ROC_taus(y_pred, y_test, class_labels, plot_dir):
     plot_roc(y_true_taus_vs_leptons, y_score_taus_vs_leptons, r'$\tau = \tau_{{h}}^{{+}} + \tau_{{h}}^{{-}}$ vs Leptons (muon, electron)', os.path.join(save_dir, "ROC_taus_vs_leptons"))
 
 
-def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
+def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair, signal_proc=None):
     """
     Generate ROC curves comparing between two specific class labels.
     """
@@ -131,7 +132,7 @@ def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
     ax.grid(True)
     ax.set_ylabel('Mistag Rate')
     ax.set_xlabel('Signal Efficiency')
-    ax.legend(loc='lower right')
+    ax.legend(loc='lower right', title=signal_proc)
     ax.set_yscale('log')
     ax.set_ylim([1e-3, 1.1])
 
@@ -468,7 +469,41 @@ def plot_shaply(model, X_test, class_labels, input_vars, plot_dir):
         plt.savefig(plot_dir+"/shap_summary_reg.png",bbox_inches='tight')
 
 # <<<<<<<<<<<<<<<<< end of plotting functions, call basic to plot all of them
-def basic(model_dir):
+
+# Helper functions for signal specific plotting
+def filter_process(test_data, process_dir):
+    """
+    Filter jets from specific signal process to create plots for specified signal processes.
+    Comparison done through concatenation of sets to be compared and np unique to check for duplicates.
+    """
+    train, test, class_labels = load_data(process_dir, percentage=100)[:3]
+    train, test = to_ML(train, class_labels), to_ML(test, class_labels)
+
+    # apply unique to sets to be compared, since there tend to be duplicates
+    process_data = np.unique(np.concatenate((train[0], test[0]), axis=0), axis=0)
+    unique_test_data, indices_unique_test_data = np.unique(test_data, axis=0, return_index=True)
+    comparison_data = np.concatenate((unique_test_data, process_data), axis=0)
+    u, index, counts = np.unique(comparison_data, axis=0, return_index=True, return_counts=True)
+    process_indices = index[counts == 2]
+    filtered_indices = indices_unique_test_data[process_indices]
+
+    return filtered_indices
+
+
+# fancy signal process labels
+def process_labels(process_key):
+    processes = {
+        'TT_PU200': r't$\bar{t}$ (PU200)',
+        'ggHHbbbb_PU200': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$b$\bar{b}$ (PU200)',
+        'VBFHtt_PU200': r'VBF $\rightarrow$ H $\rightarrow$ t$\bar{t}$ (PU200)',
+        'ggHHbbtt_PU200': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$t$\bar{t}$ (PU200)',
+        'ggHtt_PU200': r'gg $\rightarrow$ HH $\rightarrow$ t$\bar{t}$ (PU200)',
+        }
+
+    return processes[process_key]
+
+
+def basic(model_dir, signal_dir=None):
     """
     Plot the basic ROCs for different classes. Does not reflect L1 rate
     Returns a dictionary of ROCs for each class
@@ -488,6 +523,21 @@ def basic(model_dir):
     truth_pt_test = np.load(f"{model_dir}/testing_data/truth_pt_test.npy")
     reco_pt_test = np.load(f"{model_dir}/testing_data/reco_pt_test.npy")
 
+    if signal_dir:
+        signal_indices = filter_process(X_test, signal_dir) # get indices of signal process
+
+        # use only jets of specified signal process
+        X_test = X_test[signal_indices]
+        y_test = y_test[signal_indices]
+        truth_pt_test = truth_pt_test[signal_indices]
+        reco_pt_test = reco_pt_test[signal_indices]
+
+        plot_dir = os.path.join(plot_dir, signal_dir)
+        os.makedirs(plot_dir, exist_ok=True)
+        process_label = process_labels(signal_dir)
+    else:
+        process_label = None
+
     #Load model
     model = load_qmodel(f"{model_dir}/model/saved_model.h5")
     model_outputs = model.predict(X_test)
@@ -504,7 +554,7 @@ def basic(model_dir):
         for j in class_labels.keys():
             if i != j:
                 class_pair = (i,j)
-                ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair)
+                ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair, process_label)
 
     #ROC for taus versus jets and taus versus leptons
     ROC_taus(y_pred, y_test, class_labels, plot_dir)
@@ -525,97 +575,3 @@ def basic(model_dir):
     plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
 
     return ROC_dict
-
-
-def kfolds_basic(model_dir, n_folds):
-
-    folds_dir = f"{model_dir}_{n_folds}folds"
-    n_files = len(os.listdir(folds_dir))
-
-    # Check if all folds are present
-    if n_files != n_folds:
-        raise ValueError(f"Expected {n_folds} validation folds, found {n_files}")
-
-    # Load the metadata for class_label
-    with open(f"{folds_dir}/{os.listdir(folds_dir)[0]}/class_label.json", 'r') as file: class_labels = json.load(file)
-    with open(f"{folds_dir}/{os.listdir(folds_dir)[0]}/input_vars.json", 'r') as file: input_vars = json.load(file)
-
-    ROC_dict = {class_label : 0 for class_label in class_labels}
-
-    X_tests = []
-    y_preds = []
-    y_tests = []
-    truth_pt_tests = []
-    reco_pt_tests = []
-    pt_ratios = []
-
-    from IPython import embed; embed()
-
-    # Make predictions for each fold and collect the results
-    for f in os.listdir(folds_dir):
-        # Load fold data
-        X_test_fold = np.load(f"{folds_dir}/{f}/testing_data/X_test.npy")
-        y_test_fold = np.load(f"{folds_dir}/{f}/testing_data/y_test.npy")
-        truth_pt_test_fold = np.load(f"{folds_dir}/{f}/testing_data/truth_pt_test.npy")
-        reco_pt_test_fold = np.load(f"{folds_dir}/{f}/testing_data/reco_pt_test.npy")
-
-        #Load model
-        model = load_qmodel(f"{folds_dir}/{f}/model/saved_model.h5")
-        y_pred_fold, pt_ratio_fold = model.predict(X_test_fold)
-
-        # collect predictions and truth labels
-        X_tests.append(X_test_fold)
-        y_preds.append(y_pred_fold)
-        y_tests.append(y_test_fold)
-        truth_pt_tests.append(truth_pt_test_fold)
-        reco_pt_tests.append(reco_pt_test_fold)
-        pt_ratios.append(pt_ratio_fold.flatten())
-
-    # Concatenate the predictions and truth labels of the individual folds
-    X_test = np.concatenate(X_tests)
-    y_pred = np.concatenate(y_preds)
-    y_test = np.concatenate(y_tests)
-    truth_pt_test = np.concatenate(truth_pt_tests)
-    reco_pt_test = np.concatenate(reco_pt_tests)
-    pt_ratio = np.concatenate(pt_ratios)
-
-    # Create the plot directory
-    plot_dir = os.path.join(folds_dir, "plots")
-    if os.path.exists(plot_dir):
-        shutil.rmtree(plot_dir)
-    os.makedirs(plot_dir)
-
-    #Plot ROC curves
-    ROC_dict = ROC(y_pred, y_test, class_labels, plot_dir, ROC_dict)
-
-    #Generate all possible pairs of classes
-    for i in class_labels.keys():
-        for j in class_labels.keys():
-            if i != j:
-                class_pair = (i,j)
-                ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair)
-
-    #ROC for taus versus jets and taus versus leptons
-    ROC_taus(y_pred, y_test, class_labels, plot_dir)
-
-    #Plot pt corrections
-    pt_correction_hist(pt_ratio, truth_pt_test, reco_pt_test, plot_dir)
-
-    #Plot input distributions
-    plot_input_vars(X_test, input_vars, plot_dir)
-
-    #Plot inclusive response and individual flavor
-    response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
-
-    #Plot the rms of the residuals vs pt
-    rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
-
-    #Plot the shaply feature importance
-    plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
-
-    return ROC_dict
-
-
-
-
-
