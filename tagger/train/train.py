@@ -192,6 +192,7 @@ if __name__ == "__main__":
 
     #Making input arguments
     parser.add_argument('--make-data', action='store_true', help='Prepare the data if set.')
+    parser.add_argument('--make-signal-data', action='store_true', help='Prepare the signal data required for plotting.')
     parser.add_argument('-i','--input', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_5param_221124/All200.root' , help = 'Path to input training data')
     parser.add_argument('-r','--ratio', default=1, type=float, help = 'Ratio (0-1) of the input data root file to process')
     parser.add_argument('-s','--step', default='100MB' , help = 'The maximum memory size to process input root file')
@@ -205,7 +206,7 @@ if __name__ == "__main__":
 
     #Basic ploting
     parser.add_argument('--plot-basic', action='store_true', help='Plot all the basic performance if set')
-    parser.add_argument('-sig', '--signal-process', default=None, help='Specify a signal process used for plotting')
+    parser.add_argument('-sig', '--signal-processes', default=[], nargs='*', help='Specify all signal process for individual plotting')
 
     args = parser.parse_args()
 
@@ -214,6 +215,17 @@ if __name__ == "__main__":
     #Either make data or start the training
     if args.make_data:
         make_data(infile=args.input, step_size=args.step, extras=args.extras, ratio=args.ratio) #Write to training_data/, can be specified using outdir, but keeping it simple here for now
+
+    elif args.make_signal_data:
+        if not args.signal_processes:
+            raise ValueError("No signal processes specified for making signal data.")
+        # Format all the signal processes used for plotting later
+        for signal_process in args.signal_processes:
+            signal_input = os.path.join(os.path.dirname(args.input), f"{signal_process}.root")
+            signal_output = os.path.join("signal_process_data", signal_process)
+            if not os.path.exists(signal_output):
+                make_data(infile=signal_input, outdir=signal_output, step_size=args.step, extras=args.extras)
+
     elif args.plot_basic:
         model_dir = args.output
         f = open("mlflow_run_id.txt", "r")
@@ -223,9 +235,8 @@ if __name__ == "__main__":
                             run_name=args.name,
                             run_id=run_id # pass None to start a new run
                             ):
-
             #All the basic plots!
-            results = basic(model_dir, args.signal_process)
+            results = basic(model_dir, args.signal_processes)
             for class_label in results.keys():
                 mlflow.log_metric(class_label + ' ROC AUC',results[class_label])
 

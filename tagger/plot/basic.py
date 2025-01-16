@@ -132,7 +132,7 @@ def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair, signal_proc=N
     ax.grid(True)
     ax.set_ylabel('Mistag Rate')
     ax.set_xlabel('Signal Efficiency')
-    ax.legend(loc='lower right', title=signal_proc)
+    ax.legend(loc='lower right', title=signal_proc, alignment='left')
     ax.set_yscale('log')
     ax.set_ylim([1e-3, 1.1])
 
@@ -476,7 +476,7 @@ def filter_process(test_data, process_dir):
     Filter jets from specific signal process to create plots for specified signal processes.
     Comparison done through concatenation of sets to be compared and np unique to check for duplicates.
     """
-    train, test, class_labels = load_data(process_dir, percentage=100)[:3]
+    train, test, class_labels = load_data(os.path.join("signal_process_data", process_dir), percentage=100)[:3]
     train, test = to_ML(train, class_labels), to_ML(test, class_labels)
 
     # apply unique to sets to be compared, since there tend to be duplicates
@@ -503,7 +503,7 @@ def process_labels(process_key):
     return processes[process_key]
 
 
-def basic(model_dir, signal_dir=None):
+def basic(model_dir, signal_dirs):
     """
     Plot the basic ROCs for different classes. Does not reflect L1 rate
     Returns a dictionary of ROCs for each class
@@ -523,21 +523,6 @@ def basic(model_dir, signal_dir=None):
     truth_pt_test = np.load(f"{model_dir}/testing_data/truth_pt_test.npy")
     reco_pt_test = np.load(f"{model_dir}/testing_data/reco_pt_test.npy")
 
-    if signal_dir:
-        signal_indices = filter_process(X_test, signal_dir) # get indices of signal process
-
-        # use only jets of specified signal process
-        X_test = X_test[signal_indices]
-        y_test = y_test[signal_indices]
-        truth_pt_test = truth_pt_test[signal_indices]
-        reco_pt_test = reco_pt_test[signal_indices]
-
-        plot_dir = os.path.join(plot_dir, signal_dir)
-        os.makedirs(plot_dir, exist_ok=True)
-        process_label = process_labels(signal_dir)
-    else:
-        process_label = None
-
     #Load model
     model = load_qmodel(f"{model_dir}/model/saved_model.h5")
     model_outputs = model.predict(X_test)
@@ -550,11 +535,27 @@ def basic(model_dir, signal_dir=None):
     ROC_dict = ROC(y_pred, y_test, class_labels, plot_dir,ROC_dict)
 
     #Generate all possible pairs of classes
+    class_pairs = []
     for i in class_labels.keys():
         for j in class_labels.keys():
             if i != j:
                 class_pair = (i,j)
-                ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair, process_label)
+                class_pairs.append(class_pair)
+
+    # Make ROC binaries for complete test set and each signal process
+    for i in range(-1, len(signal_dirs), 1):
+        if i == -1:
+            y_p, y_t = y_pred, y_test
+            process_label = None
+            binary_dir = plot_dir
+        else:
+            signal_indices = filter_process(X_test, signal_dirs[i])
+            y_p, y_t = y_pred[signal_indices], y_test[signal_indices]
+            process_label = process_labels(signal_dirs[i])
+            binary_dir = os.path.join(plot_dir, signal_dirs[i])
+
+        for class_pair in class_pairs:
+            ROC_binary(y_p, y_t, class_labels, binary_dir, class_pair, process_label)
 
     #ROC for taus versus jets and taus versus leptons
     ROC_taus(y_pred, y_test, class_labels, plot_dir)
