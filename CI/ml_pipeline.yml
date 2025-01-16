@@ -22,7 +22,7 @@ variables:
     Inputs: baseline
     DataDir: ./
     Dataset: All200.root
-    Signal: "VBFHtt" # add interessting signal procs here in process_labels() in tagger/plot/basic.py
+    Signal: "VBFHtt_PU200" # add interessting signal procs here in process_labels() in tagger/plot/basic.py
 
 .template:
   image: gitlab-registry.cern.ch/cebrown/docker-images/mamba_jettagger:latest
