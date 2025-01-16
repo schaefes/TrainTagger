@@ -1,0 +1,22 @@
+[
+    "pt",
+    "pt_rel",
+    "pt_log",
+    "deta",
+    "dphi",
+    "mass",
+    "isPhoton",
+    "isElectronPlus",
+    "isElectronMinus",
+    "isMuonPlus",
+    "isMuonMinus",
+    "isNeutralHadron",
+    "isChargedHadronPlus",
+    "isChargedHadronMinus",
+    "z0",
+    "dxy",
+    "isfilled",
+    "puppiweight",
+    "emid",
+    "quality"
+]

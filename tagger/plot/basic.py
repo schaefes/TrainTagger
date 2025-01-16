@@ -12,7 +12,6 @@ import mplhep as hep
 import tensorflow as tf
 import tagger.plot.style as style
 from tagger.data.tools import load_data, to_ML
-
 import os
 from .common import PT_BINS
 from .common import plot_histo

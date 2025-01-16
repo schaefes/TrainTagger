@@ -1,0 +1,47 @@
+[
+    {
+        "chunk": 0,
+        "entries": 46404,
+        "file": "signal_process_data/ggHHbbbb_PU200/data_chunk_0.root"
+    },
+    {
+        "chunk": 1,
+        "entries": 46359,
+        "file": "signal_process_data/ggHHbbbb_PU200/data_chunk_1.root"
+    },
+    {
+        "chunk": 2,
+        "entries": 46198,
+        "file": "signal_process_data/ggHHbbbb_PU200/data_chunk_2.root"
+    },
+    {
+        "chunk": 3,
+        "entries": 46282,
+        "file": "signal_process_data/ggHHbbbb_PU200/data_chunk_3.root"
+    },
+    {
+        "chunk": 4,
+        "entries": 46797,
+        "file": "signal_process_data/ggHHbbbb_PU200/data_chunk_4.root"
+    },
+    {
+        "chunk": 5,
+        "entries": 46496,
+        "file": "signal_process_data/ggHHbbbb_PU200/data_chunk_5.root"
+    },
+    {
+        "chunk": 6,
+        "entries": 46027,
+        "file": "signal_process_data/ggHHbbbb_PU200/data_chunk_6.root"
+    },
+    {
+        "chunk": 7,
+        "entries": 46334,
+        "file": "signal_process_data/ggHHbbbb_PU200/data_chunk_7.root"
+    },
+    {
+        "chunk": 8,
+        "entries": 3626,
+        "file": "signal_process_data/ggHHbbbb_PU200/data_chunk_8.root"
+    }
+]
