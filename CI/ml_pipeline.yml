@@ -51,6 +51,7 @@ data:
   - mkdir data
   - cd data
   - mc cp $ARTIFACTS_ALIAS/$ARTIFACTS_BUCKET/$DataDir/$Dataset ./
+  - mc cp $ARTIFACTS_ALIAS/$ARTIFACTS_BUCKET/$DataDir/VBFHtt_PU200.root ./VBFHtt.root
   - cd ..
   - python tagger/train/train.py --make-data -i data/$Dataset -sig $Signal
   - tar -cf training_data_$Inputs.tgz training_data
