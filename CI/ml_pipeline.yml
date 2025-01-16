@@ -22,6 +22,7 @@ variables:
     Inputs: baseline
     DataDir: ./
     Dataset: All200.root
+    Signal: "VBFHtt" # add interessting signal procs here in process_labels() in tagger/plot/basic.py
 
 .template:
   image: gitlab-registry.cern.ch/cebrown/docker-images/mamba_jettagger:latest
@@ -51,7 +52,7 @@ data:
   - cd data
   - mc cp $ARTIFACTS_ALIAS/$ARTIFACTS_BUCKET/$DataDir/$Dataset ./
   - cd ..
-  - python tagger/train/train.py --make-data -i data/$Dataset
+  - python tagger/train/train.py --make-data -i data/$Dataset -sig $Signal
   - tar -cf training_data_$Inputs.tgz training_data
   - mc cp training_data_$Inputs.tgz $ARTIFACTS_ALIAS/$ARTIFACTS_BUCKET/$DataDir
 
@@ -59,7 +60,7 @@ train:
   extends:
     - .template
   stage: train
-  needs: 
+  needs:
     - job : data
       optional: true
   script:
@@ -67,7 +68,7 @@ train:
   - tar -xf training_data_$Inputs.tgz
   - source activate tagger
   - python tagger/train/train.py -n $Name
-  - python tagger/train/train.py --plot-basic -n $Name
+  - python tagger/train/train.py --plot-basic -n $Name -sig $Signal
   - cd output/baseline
   - tar -cf testing_data_$Inputs.tgz testing_data
   - mc cp testing_data_$Inputs.tgz $ARTIFACTS_ALIAS/$ARTIFACTS_BUCKET/$DataDir
@@ -203,7 +204,7 @@ upload:
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.cern.ch/cms-analysis/general/php-plots.git -b feature/update_extension_grouping
     - export PATH="${PATH}:/builds/ml_l1/php-plots/bin"
     - pb_copy_index.py TrainTagger/${Name} --recursive
-    - pb_deploy_plots.py TrainTagger/${Name} /eos/user/c/cebrown/www/JetTagging/${CI_PROJECT_NAME}/${CI_COMMIT_REF_NAME} --recursive --extensions h5,cpp,h,yml,tcl,sh,png,pdf,rpt 
+    - pb_deploy_plots.py TrainTagger/${Name} /eos/user/c/cebrown/www/JetTagging/${CI_PROJECT_NAME}/${CI_COMMIT_REF_NAME} --recursive --extensions h5,cpp,h,yml,tcl,sh,png,pdf,rpt
   artifacts:
     paths:
       - $Name
