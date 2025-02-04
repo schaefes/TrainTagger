@@ -11,18 +11,19 @@ from hist import Hist
 import matplotlib.pyplot as plt
 import matplotlib
 import mplhep as hep
-import tagger.plot.style as style
 
-style.set_style()
 
 #Interpolation of working point
 from scipy.interpolate import interp1d
 
 #Imports from other modules
+import tagger.plot.style as style
 from tagger.data.tools import extract_array, extract_nn_inputs, group_id_values
 from common import MINBIAS_RATE, WPs_CMSSW, find_rate, plot_ratio, get_bar_patch_data
 
-def nn_bscore_sum(model, jet_nn_inputs, n_jets=4, b_index = 1):
+style.set_style()
+
+def nn_score_sum(model, jet_nn_inputs, indices, n_jets=2):
 
     #Get the inputs for the first n_jets
     btag_inputs = [np.asarray(jet_nn_inputs[:, i]) for i in range(0, n_jets)]
@@ -31,16 +32,20 @@ def nn_bscore_sum(model, jet_nn_inputs, n_jets=4, b_index = 1):
     nn_outputs = [model.predict(nn_input) for nn_input in btag_inputs]
 
     #Sum them together
-    bscore_sum = sum([pred_score[0][:, b_index] for pred_score in nn_outputs])
+    b_index = indices['b']
+    c_index = indices['charm']
+    # bscore_sum = sum([pred_score[0][:, b_index] for pred_score in nn_outputs])
+    cscore_sum = sum([pred_score[0][:, c_index] for pred_score in nn_outputs])
+    # bcscore_sum = bscore_sum + cscore_sum
 
-    return bscore_sum
+    return cscore_sum
 
 def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
     """
     Pick the working points and plot
     """
 
-    plot_dir = os.path.join(model_dir, 'plots/physics/bbbb')
+    plot_dir = os.path.join(model_dir, 'plots/physics/cc')
     os.makedirs(plot_dir, exist_ok=True)
 
     fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
@@ -51,10 +56,10 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
                     norm=matplotlib.colors.LogNorm())
 
     cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label(r'4-b rate [kHZ]')
+    cbar.set_label(r'cc rate [kHZ]')
 
     ax.set_ylabel(r"HT [GeV]")
-    ax.set_xlabel(r"$\sum_{4~leading~jets}$ b scores")
+    ax.set_xlabel(r"$\sum_{2~leading~jets}$ c scores")
 
     ax.set_xlim([0,2.5])
     ax.set_ylim([10,500])
@@ -73,10 +78,10 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
     interp_func = interp1d(target_rate_HT, target_rate_NN, kind='linear', fill_value='extrapolate')
 
     # Interpolate the NN value for the desired HT
-    working_point_NN = interp_func(WPs_CMSSW['btag_l1_ht'])
+    working_point_NN = interp_func(WPs_CMSSW['btag_l1_ht'] / 2)
 
     # Export the working point
-    working_point = {"HT": WPs_CMSSW['btag_l1_ht'], "NN": float(working_point_NN)}
+    working_point = {"HT": WPs_CMSSW['btag_l1_ht'] / 2, "NN": float(working_point_NN)}
     with open(os.path.join(plot_dir, "working_point.json"), "w") as f:
         json.dump(working_point, f, indent=4)
 
@@ -86,10 +91,10 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
                 label = r"${} \pm {}$ kHz".format(target_rate, RateRange))
 
     ax.legend(loc='upper right')
-    plt.savefig(f"{plot_dir}/bbbb_rate.pdf", bbox_inches='tight')
-    plt.savefig(f"{plot_dir}/bbbb_rate.png", bbox_inches='tight')
+    plt.savefig(f"{plot_dir}/cc_rate.pdf", bbox_inches='tight')
+    plt.savefig(f"{plot_dir}/cc_rate.png", bbox_inches='tight')
 
-def derive_bbbb_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree='jetntuple/Jets'):
+def derive_cc_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree='outnano/Jets'):
     """
     Derive the HH->4b working points
     """
@@ -112,42 +117,44 @@ def derive_bbbb_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree
     print("Total number of minbias events: ", n_events)
 
     #Group these attributes by event id, and filter out groups that don't have at least 2 elements
-    event_id, grouped_arrays  = group_id_values(raw_event_id, raw_jet_pt, raw_inputs, num_elements=4)
+    event_id, grouped_arrays  = group_id_values(raw_event_id, raw_jet_pt, raw_inputs, num_elements=2)
 
     # Extract the grouped arrays
     # Jet pt is already sorted in the producer, no need to do it here
     jet_pt, jet_nn_inputs = grouped_arrays
 
-    #Btag input list for first 4 jets
-    nn_outputs = [model.predict(np.asarray(jet_nn_inputs[:, i])) for i in range(0,4)]
+    #btag input list for first 2 jets
+    nn_outputs = [model.predict(np.asarray(jet_nn_inputs[:, i])) for i in range(0,2)]
 
     #Calculate the output sum
     b_index = class_labels['b']
-    bscore_sum = sum([pred_score[0][:, b_index] for pred_score in nn_outputs])
+    c_index = class_labels['charm']
+    # bscore_sum = sum([pred_score[0][:, b_index] for pred_score in nn_outputs])
+    cscore_sum = sum([pred_score[0][:, c_index] for pred_score in nn_outputs])
+    # bcscore_sum = bscore_sum + cscore_sum
     ht = ak.sum(jet_pt, axis=1)
 
-    assert(len(bscore_sum) == len(ht))
+    assert(len(cscore_sum) == len(ht))
 
     #Define the histograms (pT edge and NN Score edge)
-    ht_edges = list(np.arange(0,500,2)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,2) for i in np.arange(0, 2.5, 0.01)]) + [4.0]
+    ht_edges = list(np.arange(0,250,1)) + [5000] #Make sure to capture everything
+    NN_edges = list([round(i,3) for i in np.arange(0, 1.25, 0.005)]) + [2.0]
 
     RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
                     hist.axis.Variable(NN_edges, name="nn", label="nn"))
 
-    RateHist.fill(ht = ht, nn = bscore_sum)
+    RateHist.fill(ht = ht, nn = cscore_sum)
 
     #Derive the rate
     rate_list = []
     ht_list = []
     nn_list = []
-
     #Loop through the edges and integrate
     for ht in ht_edges[:-1]:
         for NN in NN_edges[:-1]:
 
             #Calculate the rate
-            rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(NN*1.0j, None, sum)}]/n_events
+            rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(NN*1.00j, None, sum)}]/n_events
             rate_list.append(rate*MINBIAS_RATE)
 
             #Append the results
@@ -155,13 +162,11 @@ def derive_bbbb_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree
             nn_list.append(NN)
 
     #Pick target rate and plot it
-    from IPython import embed; embed()
-    print(rate_list, ht_list, nn_list, target_rate)
     pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate=target_rate)
 
     return
 
-def bbbb_eff_HT(model_dir, signal_path, n_entries=100000, tree='jetntuple/Jets'):
+def cc_eff_HT(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
     """
     Plot HH->4b efficiency w.r.t HT
     """
@@ -172,11 +177,11 @@ def bbbb_eff_HT(model_dir, signal_path, n_entries=100000, tree='jetntuple/Jets')
     ht_axis = hist.axis.Variable(ht_egdes, name = r"$HT^{gen}$")
 
     #Working points for CMSSW
-    cmssw_btag = WPs_CMSSW['btag']
-    cmssw_btag_ht =  WPs_CMSSW['btag_l1_ht']
+    cmssw_btag = WPs_CMSSW['btag'] / 2
+    cmssw_btag_ht =  WPs_CMSSW['btag_l1_ht'] / 2
 
     #Check if the working point have been derived
-    WP_path = os.path.join(model_dir, "plots/physics/bbbb/working_point.json")
+    WP_path = os.path.join(model_dir, "plots/physics/cc/working_point.json")
 
     #Get derived working points
     if os.path.exists(WP_path):
@@ -201,8 +206,8 @@ def bbbb_eff_HT(model_dir, signal_path, n_entries=100000, tree='jetntuple/Jets')
 
     raw_inputs = extract_nn_inputs(signal, input_vars, n_entries=n_entries)
 
-    #Group these attributes by event id, and filter out groups that don't have at least 4 elements
-    event_id, grouped_arrays  = group_id_values(raw_event_id, raw_jet_genpt, raw_jet_pt, raw_cmssw_bscore, raw_inputs, num_elements=4)
+    #Group these attributes by event id, and filter out groups that don't have at least 2 elements
+    event_id, grouped_arrays  = group_id_values(raw_event_id, raw_jet_genpt, raw_jet_pt, raw_cmssw_bscore, raw_inputs, num_elements=2)
     jet_genpt, jet_pt, cmssw_bscore, jet_nn_inputs = grouped_arrays
 
     #Calculate the ht
@@ -210,11 +215,11 @@ def bbbb_eff_HT(model_dir, signal_path, n_entries=100000, tree='jetntuple/Jets')
     jet_ht = ak.sum(jet_pt, axis=1)
 
     #B score from cmssw emulator
-    cmsssw_bscore_sum = ak.sum(cmssw_bscore[:,:4], axis=1) #Only sum up the first four
-    model_bscore_sum = nn_bscore_sum(model, jet_nn_inputs, b_index=class_labels['b'])
+    cmsssw_bscore_sum = ak.sum(cmssw_bscore[:,:2], axis=1) #Only sum up the first two
+    model_score_sum = nn_score_sum(model, jet_nn_inputs, class_labels)
 
     cmssw_selection = (jet_ht > cmssw_btag_ht) & (cmsssw_bscore_sum > cmssw_btag)
-    model_selection = (jet_ht > btag_ht_wp) & (model_bscore_sum > btag_wp)
+    model_selection = (jet_ht > btag_ht_wp) & (model_score_sum > btag_wp)
 
     #PLot the efficiencies
     #Basically we want to bin the selected truth ht and divide it by the overall count
@@ -237,8 +242,8 @@ def bbbb_eff_HT(model_dir, signal_path, n_entries=100000, tree='jetntuple/Jets')
     #Now plot all
     fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
-    ax.errorbar(cmssw_x, cmssw_y, yerr=cmssw_err, c=style.color_cycle[0], fmt='o', linewidth=3, label=r'BTag CMSSW Emulator @ 14 kHz (L1 $HT$ > {} GeV, $\sum$ 4b > {})'.format(cmssw_btag_ht, cmssw_btag))
-    ax.errorbar(model_x, model_y, yerr=model_err, c=style.color_cycle[1], fmt='o', linewidth=3, label=r'Multiclass @ 14 kHz (L1 $HT$ > {} GeV, $\sum$ 4b > {})'.format(btag_ht_wp, round(btag_wp,2)))
+    ax.errorbar(cmssw_x, cmssw_y, yerr=cmssw_err, c=style.color_cycle[0], fmt='o', linewidth=3, label=r'btag CMSSW Emulator @ 14 kHz (L1 $HT$ > {} GeV, $\sum$ bb > {})'.format(cmssw_btag_ht, cmssw_btag))
+    ax.errorbar(model_x, model_y, yerr=model_err, c=style.color_cycle[1], fmt='o', linewidth=3, label=r'Multiclass @ 14 kHz (L1 $HT$ > {} GeV, $\sum$ cc > {})'.format(btag_ht_wp, round(btag_wp,2)))
 
     #Plot other labels
     ax.hlines(1, 0, 800, linestyles='dashed', color='black', linewidth=4)
@@ -246,11 +251,11 @@ def bbbb_eff_HT(model_dir, signal_path, n_entries=100000, tree='jetntuple/Jets')
     ax.set_ylim([0., 1.1])
     ax.set_xlim([0, 800])
     ax.set_xlabel(r"$HT^{gen}$ [GeV]")
-    ax.set_ylabel(r"$\epsilon$(HH $\to$ 4b trigger rate at 14 kHz)")
+    ax.set_ylabel(r"$\epsilon$(H $\to$ cc trigger rate at 14 kHz)")
     plt.legend(loc='upper left')
 
     #Save plot
-    plot_path = os.path.join(model_dir, "plots/physics/bbbb/HH_eff_HT")
+    plot_path = os.path.join(model_dir, "plots/physics/cc/HH_eff_HT")
     plt.savefig(f'{plot_path}.pdf', bbox_inches='tight')
     plt.savefig(f'{plot_path}.png', bbox_inches='tight')
     plt.show(block=False)
@@ -260,24 +265,24 @@ if __name__ == "__main__":
     """
     2 steps:
 
-    1. Derive working points: python bbbb.py --deriveWPs
-    2. Run efficiency based on the derived working points: python bbbb.py --eff
+    1. Derive working points: python HtoCC.py --deriveWPs
+    2. Run efficiency based on the derived working points: python HtoCC.py --eff
     """
 
     parser = ArgumentParser()
     parser.add_argument('-m','--model_dir', default='output/baseline', help = 'Input model')
-    parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/baselineTRK_4param_021024/ggHHbbbb_PU200.root' , help = 'Signal sample for HH->bbbb')
-    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/baselineTRK_4param_021024/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
+    parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToCC_PU200.root' , help = 'Signal sample for VBF->H->cc')
+    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
 
     #Different modes
-    parser.add_argument('--deriveWPs', action='store_true', help='derive the working points for b-tagging')
-    parser.add_argument('--eff', action='store_true', help='plot efficiency for HH->4b')
+    parser.add_argument('--deriveWPs', action='store_true', help='derive the working points for c-tagging')
+    parser.add_argument('--eff', action='store_true', help='plot efficiency for VBF->H->cc')
 
     #Other controls
     parser.add_argument('-n','--n_entries', type=int, default=1000, help = 'Number of data entries in root file to run over, can speed up run time, set to None to run on all data entries')
     args = parser.parse_args()
 
     if args.deriveWPs:
-        derive_bbbb_WPs(args.model_dir, args.minbias, n_entries=args.n_entries)
+        derive_cc_WPs(args.model_dir, args.minbias, n_entries=args.n_entries)
     elif args.eff:
-        bbbb_eff_HT(args.model_dir, args.sample, n_entries=args.n_entries)
+        cc_eff_HT(args.model_dir, args.sample, n_entries=args.n_entries)
