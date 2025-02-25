@@ -21,6 +21,7 @@ import tagger.plot.style as style
 from tagger.data.tools import extract_array, extract_nn_inputs, group_id_values
 import rate_configurations
 from common import MINBIAS_RATE, WPs_CMSSW, find_rate, plot_ratio, get_bar_patch_data
+from topo_helpers import topo_tagger_input
 
 style.set_style()
 
@@ -41,7 +42,6 @@ def nn_score_sum(model, jet_nn_inputs, indices, tag_sum, n_jets=2):
     #Get the nn outputs
     nn_outputs = [model.predict(nn_input) for nn_input in btag_inputs]
 
-    #Sum them together
     b_index = indices['b']
     c_index = indices['charm']
 
@@ -103,24 +103,28 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, rate):
                 label = r"${} \pm {}$ kHz".format(rate, RateRange))
 
     ax.legend(loc='upper right')
-    plt.savefig(f"{plot_dir}/cc_rate_{rate}_{tag_sum}.pdf", bbox_inches='tight')
+    plt.savefig(f"{plot_dir}/cc_{rate}_{tag_sum}.pdf", bbox_inches='tight')
     plt.savefig(f"{plot_dir}/cc_rate_{rate}_{tag_sum}.png", bbox_inches='tight')
 
-def derive_cc_WPs(model_dir, minbias_path, seed_name, tag_sum, n_entries=100, tree='jetntuple/Jets'):
+def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum, n_entries=100, tree='jetntuple/Jets'):
     """
     Derive the HH->4b working points
     """
-    with open(os.path.join(model_dir, f"plots/physics/cc/{seed_name}_rate.json"), "r") as f: rate = json.load(f)
+    with open(os.path.join(f"tagger/output/physics/cc_rates/{seed_name}_rate.json"), "r") as f: rate = json.load(f)
     target_rate = rate['rate']
 
-    model=load_qmodel(os.path.join(model_dir, "model/saved_model.h5"))
+    tagger_model=load_qmodel(os.path.join(tagger_dir, "model/saved_model.h5"))
+    topo_model = load_qmodel(os.path.join(topo_dir, "model.h5"))
 
     #Load input/ouput variables of the NN
-    with open(os.path.join(model_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
-    with open(os.path.join(model_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
+    with open(os.path.join(tagger_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
+    with open(os.path.join(topo_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
 
     #Load the minbias data
     minbias = uproot.open(minbias_path)[tree]
+
+    # topo trigger data
+    n_features = topo_model.layers
 
     raw_event_id = extract_array(minbias, 'event', n_entries)
     raw_jet_pt = extract_array(minbias, 'jet_pt', n_entries)
@@ -136,53 +140,55 @@ def derive_cc_WPs(model_dir, minbias_path, seed_name, tag_sum, n_entries=100, tr
     # Extract the grouped arrays
     # Jet pt is already sorted in the producer, no need to do it here
     jet_pt, jet_nn_inputs = grouped_arrays
+    from IPython import embed; embed()
+    tagger_preds = tagger_model.predict(np.asarray(jet_nn_inputs))
+    nn_outputs = [tagger_model.predict(np.asarray(jet_nn_inputs[:, i])) for i in range(0,2)]
+    topo_inputs = topo_tagger_input(minbias, tagger_preds, n_features)
+    topo_outputs = topo_model.predict(topo_inputs)
 
-    #btag input list for first 2 jets
-    nn_outputs = [model.predict(np.asarray(jet_nn_inputs[:, i])) for i in range(0,2)]
+    cc_topo_idx = class_labels['VBFHtoCC_PU200']
+    bb_topo_idx = class_labels['VBFHtoBB_PU200']
+    topo_score = return_sum_score(topo_outputs[:, cc_topo_idx], topo_outputs[:, bb_topo_idx], tag_sum)
 
     #Calculate the output sum
-    b_index = class_labels['b']
-    c_index = class_labels['charm']
-    # sorted_bscores = ak.sort(ak.Array([pred_score[0][:, b_index] for pred_score in nn_outputs]), axis=0)
-    # sorted_cscores = ak.sort(ak.Array([pred_score[0][:, c_index] for pred_score in nn_outputs]), axis=0)
-    bscore_sum = sum([pred_score[0][:, b_index] for pred_score in nn_outputs])
-    cscore_sum = sum([pred_score[0][:, c_index] for pred_score in nn_outputs])
-    sum_score = return_sum_score(cscore_sum, bscore_sum, tag_sum)
+    tagger_score = nn_score_sum(tagger_model, jet_nn_inputs, class_labels, tag_sum)
     ht = ak.sum(jet_pt, axis=1)
 
     assert(len(sum_score) == len(ht))
+    assert(len(cc_topo_tag) == len(ht))
 
-    #Define the histograms (pT edge and NN Score edge)
-    ht_edges = list(np.arange(0,250,1)) + [5000] #Make sure to capture everything
-    NN_edges = list([round(i,3) for i in np.arange(0, 1.25, 0.005)]) + [2.0]
+    for score, model_dir in zip([tagger_score, topo_score], [tagger_dir, topo_dir]):
+        #Define the histograms (pT edge and NN Score edge)
+        ht_edges = list(np.arange(0,250,1)) + [5000] #Make sure to capture everything
+        NN_edges = list([round(i,3) for i in np.arange(0, 1.5, 0.005)]) + [2.0]
 
-    RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
-                    hist.axis.Variable(NN_edges, name="nn", label="nn"))
+        RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
+                        hist.axis.Variable(NN_edges, name="nn", label="nn"))
 
-    RateHist.fill(ht = ht, nn = sum_score)
+        RateHist.fill(ht = ht, nn = score)
 
-    #Derive the rate
-    rate_list = []
-    ht_list = []
-    nn_list = []
-    #Loop through the edges and integrate
-    for ht in ht_edges[:-1]:
-        for NN in NN_edges[:-1]:
+        #Derive the rate
+        rate_list = []
+        ht_list = []
+        nn_list = []
+        #Loop through the edges and integrate
+        for ht in ht_edges[:-1]:
+            for NN in NN_edges[:-1]:
 
-            #Calculate the rate
-            rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(NN*1.00j, None, sum)}]/n_events
-            rate_list.append(rate*MINBIAS_RATE)
+                #Calculate the rate
+                rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(NN*1.00j, None, sum)}]/n_events
+                rate_list.append(rate*MINBIAS_RATE)
 
-            #Append the results
-            ht_list.append(ht)
-            nn_list.append(NN)
+                #Append the results
+                ht_list.append(ht)
+                nn_list.append(NN)
 
-    #Pick target rate and plot it
-    pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, target_rate)
+        #Pick target rate and plot it
+        pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, target_rate)
 
     return
 
-def derive_rate(minbias_path, seed_name, model_dir, n_entries=100000, tree='jetntuple/Jets'):
+def derive_rate(minbias_path, seed_name, n_entries=100000, tree='jetntuple/Jets'):
 
     minbias = uproot.open(minbias_path)[tree]
 
@@ -204,19 +210,19 @@ def derive_rate(minbias_path, seed_name, model_dir, n_entries=100000, tree='jetn
     # convert to rate [kHz]
     rate = {'rate': (n_passed / n_events) * MINBIAS_RATE}
 
-    plot_dir = os.path.join(model_dir, 'plots/physics/cc')
-    os.makedirs(plot_dir, exist_ok=True)
-    with open(os.path.join(plot_dir, f"{seed_name}_rate.json"), "w") as f:
+    rate_dir = os.path.join('tagger/output/physics/cc_rates')
+    os.makedirs(rate_dir, exist_ok=True)
+    with open(os.path.join(rate_dir, f"{seed_name}_rate.json"), "w") as f:
         json.dump(rate, f, indent=4)
 
     return
 
-def cc_eff_HT(model_dir, signal_path, seed_name, tag_sum, n_entries=100000, tree='outnano/Jets'):
+def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=100000, tree='outnano/Jets'):
     """
     Plot HH->4b efficiency w.r.t HT
     """
 
-    with open(os.path.join(model_dir, f"plots/physics/cc/{seed_name}_rate.json"), "r") as f: rate = json.load(f)
+    with open(os.path.join(model_dir, f"tagger/output/physics/cc_rates/{seed_name}_rate.json"), "r") as f: rate = json.load(f)
     rate = np.round(rate['rate'], 1)
     model=load_qmodel(os.path.join(model_dir, "model/saved_model.h5"))
 
@@ -224,7 +230,7 @@ def cc_eff_HT(model_dir, signal_path, seed_name, tag_sum, n_entries=100000, tree
     ht_axis = hist.axis.Variable(ht_egdes, name = r"$HT^{gen}$")
 
     #Check if the working point have been derived
-    WP_path = os.path.join(model_dir, f"plots/physics/cc/working_point_{round(rate)}_{tag_sum}.json")
+    WP_path = os.path.join(model_dir, f"plots/physics/cc_topo/working_point_{round(rate)}_{tag_sum}.json")
 
     #Get derived working points
     if os.path.exists(WP_path):
@@ -301,7 +307,7 @@ def cc_eff_HT(model_dir, signal_path, seed_name, tag_sum, n_entries=100000, tree
     plt.legend(loc='upper left')
 
     #Save plot
-    plot_path = os.path.join(model_dir, f"plots/physics/cc/Hcc_eff_{seed_name}_{tag_sum}")
+    plot_path = os.path.join(model_dir, f"plots/physics/topo_cc/Hcc_eff_{seed_name}_{tag_sum}")
     plt.savefig(f'{plot_path}.pdf', bbox_inches='tight')
     plt.savefig(f'{plot_path}.png', bbox_inches='tight')
     plt.show(block=False)
@@ -314,9 +320,9 @@ if __name__ == "__main__":
     1. Derive working points: python HtoCC.py --deriveWPs
     2. Run efficiency based on the derived working points: python HtoCC.py --eff
     """
-
     parser = ArgumentParser()
-    parser.add_argument('-m','--model_dir', default='output/baseline', help='Input model')
+    parser.add_argument('-tagger','--tagger_dir', default='output/baseline', help='Jet tagger model')
+    parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4', help='Topo tagger model')
     parser.add_argument('-seed', '--seed_name', default='ht_btag', help='Decide which seed to compare to')
     parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToCC_PU200.root', help='Signal sample for VBF->H->cc')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/MinBias_PU200.root', help='Minbias sample for deriving rates')
@@ -332,8 +338,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.deriveRate:
-        derive_rate(args.minbias, args.seed_name, args.model_dir, n_entries=args.n_entries)
+        derive_rate(args.minbias, args.seed_name, n_entries=args.n_entries)
     elif args.deriveWPs:
-        derive_cc_WPs(args.model_dir, args.minbias, args.seed_name, args.tag_sum, n_entries=args.n_entries)
+        derive_cc_WPs(args.tagger_dir, args.topo_dir, args.minbias, args.seed_name, args.tag_sum, n_entries=args.n_entries)
     elif args.eff:
-        cc_eff_HT(args.model_dir, args.sample, args.seed_name, args.tag_sum, n_entries=args.n_entries)
+        cc_eff_HT(args.tagger_dir, args.topo_dir, args.sample, args.seed_name, args.tag_sum, n_entries=args.n_entries)

@@ -1,42 +1,57 @@
-def ht_btag(jet_pt, jet_eta, jet_btag):
+import awkward as ak
+import numpy as np
+
+
+def ht_sum_btag(jet_pt, jet_eta, jet_btag, n_jets):
+    # cut all jets with -1 for btag
+    jet_btag = jet_btag[jet_btag > -1]
+    jet_eta = jet_eta[jet_btag > -1]
+    jet_pt = jet_pt[jet_btag > -1]
+
+    # allow only events with jets that contain at least #n_jets btagged jets
+    n_mask = ak.num(jet_pt) >= n_jets
+
+    btag_sum = ak.sum(jet_btag[:,:n_jets], axis=1)
 
     ht = ak.sum(jet_pt, axis=1)
 
-    # cut -1 values in btags
-    jet_btag = jet_btag[jet_btag > 0]
-    btag_sum = ak.sum(ak.sort(jet_btag, ascending=False)[:,:4], axis=1)
-
-    mask = (ht > 220) & (btag_sum > 2.32)
+    mask = (ht > 220) & (btag_sum > (0.58 * n_jets))
+    mask = mask & n_mask
     n_passed = np.sum(mask)
 
-    return n_passed
+    return mask, n_passed
 
-def quadjet_ht(jet_pt, jet_eta, b_tag):
-    # ensure pt sorting
-    pt_sort = ak.argsort(jet_pt, axis=1)
-    jet_pt = jet_pt[pt_sort]
-    jet_eta = jet_eta[pt_sort]
+def ht_worst_btag(jet_pt, jet_eta, jet_btag, n_jets):
+    # cut all jets with -1 for btag
+    jet_btag = jet_btag[jet_btag > -1]
+    jet_eta = jet_eta[jet_btag > -1]
+    jet_pt = jet_pt[jet_btag > -1]
+
+    btag_sum = ak.min(jet_btag[:,:n_jets], axis=1)
+
+    ht = ak.sum(jet_pt, axis=1)
+
+    mask = (ht > 220) & (btag_sum > 0.5)
+    n_passed = np.sum(mask)
+
+    return mask, n_passed
+
+def quadjet_ht(jet_pt, jet_eta, jet_btag, n_jets):
     pt_cuts = [70, 55, 40, 40]
-
     pt_mask = np.array([True]*len(jet_pt))
     for i, pt in enumerate(pt_cuts):
         mask = jet_ptl1(jet_pt[:,i], jet_eta[:,i], pt)
         pt_mask = pt_mask & mask
+    eta_mask = abs(jet_eta) < 2.4
+    ht_pts = jet_ptl1(jet_pt, jet_eta, 30)
+    jets_ht = jet_pt[eta_mask & ht_pts]
+    ht_mask = ak.sum(jets_ht, axis=1) > htl1(400)
+    n_passed = np.sum((ht_mask & pt_mask))
 
-    # for ht, consider only jets with pt > 30GeV and abs eta < 2.4
-    # 30 GeV prob needs to be converted with barrel endcap forward
-    # also, do the vbf topo tagger without tagging info, and check masking in gitlab
-
-
-
-
-
-
-
-    return cuts_dict
+    return mask, n_passed
 
 # translate offline to online and return mask of matching objects
-def barrel_ptl1(jet_pt, offline_pt, jet_eta):
+def barrel_ptl1(jet_pt, jet_eta, offline_pt):
     # 0 to 1.3 eta
     l1pt = (offline_pt - 17.492) / 1.294
     mask_pt = jet_pt > l1pt
@@ -44,7 +59,7 @@ def barrel_ptl1(jet_pt, offline_pt, jet_eta):
     mask = mask_pt & mask_eta
     return mask
 
-def endcap_ptl1(jet_pt, offline_pt, jet_eta):
+def endcap_ptl1(jet_pt, jet_eta, offline_pt):
     # 1.3 to 3 eta
     l1pt = (offline_pt - 15.296) / 1.773
     mask_pt = jet_pt > l1pt
@@ -52,7 +67,7 @@ def endcap_ptl1(jet_pt, offline_pt, jet_eta):
     mask = mask_pt & mask_eta
     return mask
 
-def forward_ptl1(jet_pt, offline_pt, jet_eta):
+def forward_ptl1(jet_pt, jet_eta, offline_pt):
     # 3 to 5.2 eta
     l1pt = (offline_pt - 61.507) / 1.442
     mask_pt = jet_pt > l1pt
@@ -61,10 +76,9 @@ def forward_ptl1(jet_pt, offline_pt, jet_eta):
     return mask
 
 def jet_ptl1(jet_pt, jet_eta, offline_pt):
-    mask_barrel = barrel_ptl1(jet_pt, offline_pt, jet_eta)
-    mask_endcap = endcap_ptl1(jet_pt, offline_pt, jet_eta)
-    mask_forward = forward_ptl1(jet_pt, offline_pt, jet_eta)
-
+    mask_barrel = barrel_ptl1(jet_pt, jet_eta, offline_pt)
+    mask_endcap = endcap_ptl1(jet_pt, jet_eta, offline_pt)
+    mask_forward = forward_ptl1(jet_pt, jet_eta, offline_pt)
     mask = mask_barrel | mask_endcap | mask_forward
     return mask
 
