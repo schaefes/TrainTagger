@@ -14,11 +14,6 @@ stages:
 variables:
     Name:  baseline_4_params
     Inputs: baseline
-<<<<<<< HEAD
-    DataDir: ./
-    Dataset: All200.root
-    Signal: "VBFHtt" # add interessting signal procs here in process_labels() in tagger/plot/basic.py
-=======
     TRAIN: All200.root
     EOS_DATA_DIR: /eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/
     EOS_STORAGE_DIR: /eos/cms/store/cmst3/group/l1tr/MultiJetTagger
@@ -27,7 +22,7 @@ variables:
     SCRAM_ARCH: 'el9_amd64_gcc12'
     CMSSW_VERSION: 'CMSSW_14_2_0_pre2'
     CMSSW_L1CT: 'CMS-L1T-Jet-Tagging:P2L1JetTagger_14_2_0_pre2-JetTaggerNN'
->>>>>>> upstream/main
+    Signal: "VBFHtt_PU200" # add interessting signal procs here in process_labels() in tagger/plot/basic.py
 
 .template:
   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
@@ -46,11 +41,10 @@ data:
   extends:
     - .template
   stage: data
-  image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
-  rules:
-     - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
-         - tagger/data/**
-  when: manual
+  # rules:
+  #    - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
+  #        - tagger/data/**
+  # when: manual
   script:
   - source activate tagger
   - mkdir data
@@ -58,11 +52,7 @@ data:
   - export EOS_MGM_URL=root://eoscms.cern.ch
   - eos cp $EOS_DATA_DIR/${TRAIN} .
   - cd ..
-<<<<<<< HEAD
-  - python tagger/train/train.py --make-data -i data/$Dataset -sig $Signal
-=======
-  - python tagger/train/train.py --make-data -i data/${TRAIN} --tree $NTUPLE_TREE
->>>>>>> upstream/main
+  - python tagger/train/train.py --make-data -i data/${TRAIN} --tree $NTUPLE_TREE -sig $Signal
   - tar -cf training_data_$Inputs.tgz training_data
   - export EOS_MGM_URL=root://eosproject.cern.ch
   - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}
@@ -79,13 +69,8 @@ train:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
   - source activate tagger
-<<<<<<< HEAD
   - python tagger/train/train.py -n $Name
   - python tagger/train/train.py --plot-basic -n $Name -sig $Signal
-=======
-  - python tagger/train/train.py -n $Name -p 50
-  - python tagger/train/train.py --plot-basic -n $Name
->>>>>>> upstream/main
   - cd output/baseline
   - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/plots/
   - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model/
