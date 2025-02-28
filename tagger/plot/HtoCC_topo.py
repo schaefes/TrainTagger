@@ -21,7 +21,7 @@ import tagger.plot.style as style
 from tagger.data.tools import extract_array, extract_nn_inputs, group_id_values
 import rate_configurations
 from common import MINBIAS_RATE, WPs_CMSSW, find_rate, plot_ratio, get_bar_patch_data
-from topo_helpers import topo_tagger_input
+from topo_helpers import topo_input
 
 style.set_style()
 
@@ -34,20 +34,12 @@ def return_sum_score(c_score, b_score, tag_sum):
     elif tag_sum == 'b':
         return b_score
 
-def nn_score_sum(model, jet_nn_inputs, indices, tag_sum, n_jets=2):
-
-    #Get the inputs for the first n_jets
-    btag_inputs = [np.asarray(jet_nn_inputs[:, i]) for i in range(0, n_jets)]
-
-    #Get the nn outputs
-    nn_outputs = [model.predict(nn_input) for nn_input in btag_inputs]
-
+def nn_score_sum(nn_outputs, indices, tag_sum):
     b_index = indices['b']
     c_index = indices['charm']
 
-    nn_outputs = [model.predict(nn_input) for nn_input in btag_inputs]
-    bscore_sum = sum([pred_score[0][:, b_index] for pred_score in nn_outputs])
-    cscore_sum = sum([pred_score[0][:, c_index] for pred_score in nn_outputs])
+    bscore_sum = sum([pred_score[:, b_index] for pred_score in nn_outputs])
+    cscore_sum = sum([pred_score[:, c_index] for pred_score in nn_outputs])
     sum_score = return_sum_score(cscore_sum, bscore_sum, tag_sum)
 
     return sum_score
@@ -118,13 +110,14 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum, n_entr
 
     #Load input/ouput variables of the NN
     with open(os.path.join(tagger_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
-    with open(os.path.join(topo_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
+    with open(os.path.join(tagger_dir, "class_label.json"), "r") as f: tagger_labels = json.load(f)
+    with open(os.path.join(topo_dir, "class_label.json"), "r") as f: topo_labels = json.load(f)
 
     #Load the minbias data
     minbias = uproot.open(minbias_path)[tree]
 
     # topo trigger data
-    n_features = topo_model.layers
+    n_features = topo_model.get_layer('avgpool').input_shape[-1]
 
     raw_event_id = extract_array(minbias, 'event', n_entries)
     raw_jet_pt = extract_array(minbias, 'jet_pt', n_entries)
@@ -140,27 +133,29 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum, n_entr
     # Extract the grouped arrays
     # Jet pt is already sorted in the producer, no need to do it here
     jet_pt, jet_nn_inputs = grouped_arrays
-    from IPython import embed; embed()
-    tagger_preds = tagger_model.predict(np.asarray(jet_nn_inputs))
-    nn_outputs = [tagger_model.predict(np.asarray(jet_nn_inputs[:, i])) for i in range(0,2)]
-    topo_inputs = topo_tagger_input(minbias, tagger_preds, n_features)
+    n_jets = ak.num(jet_nn_inputs, axis=1)
+    flat_jets = np.asarray(ak.flatten(jet_nn_inputs, axis=1))
+    tagger_preds = tagger_model.predict(flat_jets)[0]
+    jet_preds = ak.unflatten(tagger_preds, n_jets)[:,:,:6]
+    nn_outputs = [jet_preds[:, i] for i in range(2)]
+    topo_inputs = topo_input(minbias, jet_preds, tagger_labels, n_features, n_entries)
     topo_outputs = topo_model.predict(topo_inputs)
 
-    cc_topo_idx = class_labels['VBFHtoCC_PU200']
-    bb_topo_idx = class_labels['VBFHtoBB_PU200']
+    cc_topo_idx = topo_labels['VBFHToCC_PU200']
+    bb_topo_idx = topo_labels['VBFHToBB_PU200']
     topo_score = return_sum_score(topo_outputs[:, cc_topo_idx], topo_outputs[:, bb_topo_idx], tag_sum)
 
     #Calculate the output sum
-    tagger_score = nn_score_sum(tagger_model, jet_nn_inputs, class_labels, tag_sum)
+    tagger_score = nn_score_sum(nn_outputs, tagger_labels, tag_sum)
     ht = ak.sum(jet_pt, axis=1)
 
-    assert(len(sum_score) == len(ht))
-    assert(len(cc_topo_tag) == len(ht))
-
-    for score, model_dir in zip([tagger_score, topo_score], [tagger_dir, topo_dir]):
+    assert(len(tagger_score) == len(ht))
+    assert(len(topo_score) == len(ht))
+    from IPython import embed; embed()
+    for score, model_dir, max_score in zip([tagger_score, topo_score], [tagger_dir, topo_dir], [2., 1.]):
         #Define the histograms (pT edge and NN Score edge)
         ht_edges = list(np.arange(0,250,1)) + [5000] #Make sure to capture everything
-        NN_edges = list([round(i,3) for i in np.arange(0, 1.5, 0.005)]) + [2.0]
+        NN_edges = list([round(i,3) for i in np.arange(0, 0.75 * max_score, 0.002 / max_score)]) + [max_score]
 
         RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
                         hist.axis.Variable(NN_edges, name="nn", label="nn"))

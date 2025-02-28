@@ -50,6 +50,14 @@ def quadjet_ht(jet_pt, jet_eta, jet_btag, n_jets):
 
     return mask, n_passed
 
+def bbtautau_seed(jet_pt, jet_eta, jet_btag, n_jets):
+    pt_cuts = [25]*4
+    pt_mask = np.array([True]*len(jet_pt))
+    for i, pt in enumerate(pt_cuts):
+        mask = jet_ptl1(jet_pt[:,i], jet_eta[:,i], pt)
+        pt_mask = pt_mask & mask
+
+
 # translate offline to online and return mask of matching objects
 def barrel_ptl1(jet_pt, jet_eta, offline_pt):
     # 0 to 1.3 eta
