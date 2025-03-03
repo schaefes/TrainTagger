@@ -27,9 +27,11 @@ def nn_bscore_sum(model, jet_nn_inputs, n_jets=4, b_index = 1):
     N_FILTERS = model.get_layer('avgpool').output_shape[1]
 
     #Get the inputs and masks for the first n_jets
-    btag_inputs = [np.asarray(jet_nn_inputs[:, i]) for i in range(0, n_jets)]
-    input_masks = [get_input_mask(btag_inp, N_FILTERS) for btag_inp in btag_inputs]
-    nn_inputs = [[inp, mask] for inp, mask in zip(btag_inputs, input_masks)]
+    model_inputs = [np.asarray(jet_nn_inputs[:, i]) for i in range(0, n_jets)]
+    input_masks = [get_input_mask(btag_inp, N_FILTERS) for btag_inp in model_inputs]
+    nn_inputs = []
+    for i, m in zip(model_inputs, input_masks):
+        nn_inputs.append(np.concatenate([i, m], axis=1))
 
     #Get the nn outputs
     nn_outputs = [model.predict(nn_inp) for nn_inp in nn_inputs]
@@ -124,14 +126,9 @@ def derive_bbbb_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree
     jet_pt, jet_nn_inputs = grouped_arrays
 
     #Btag input list for first 4 jets
-    jet_inputs = [np.asarray(jet_nn_inputs[:, i]) for i in range(0, 4)]
-    input_masks = [get_input_mask(jet_inp, N_FILTERS) for jet_inp in jet_inputs]
-    nn_inputs = [[inp, mask] for inp, mask in zip(jet_inputs, input_masks)]
-    nn_outputs = [model.predict(nn_inp) for nn_inp in nn_inputs]
-
-    #Calculate the output sum
     b_index = class_labels['b']
-    bscore_sum = sum([pred_score[0][:, b_index] for pred_score in nn_outputs])
+    bscore_sum = nn_bscore_sum(model, jet_nn_inputs, n_jets=4, b_index = b_index)
+
     ht = ak.sum(jet_pt, axis=1)
 
     assert(len(bscore_sum) == len(ht))

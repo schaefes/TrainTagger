@@ -34,7 +34,8 @@ def doPlots(model,outputdir,inputdir):
 
     hls_model = convert(model,"temp",build=False)
     input_mask = get_input_mask(X_test, N_FILTERS)
-    model_inp = [np.ascontiguousarray(X_test), np.ascontiguousarray(input_mask)]
+    model_inp = np.concatenate([X_test, input_mask], axis=1)
+    model_inp = np.ascontiguousarray(model_inp)
     y_hls, y_ptreg_hls = hls_model.predict(model_inp)
     y_class, y_ptreg = model.predict(model_inp)
 
