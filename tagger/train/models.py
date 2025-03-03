@@ -3,7 +3,7 @@ Here all the models are defined to be called in train.py
 """
 import tensorflow as tf
 from tensorflow.keras.layers import (BatchNormalization, Input, Activation, GlobalAveragePooling1D,
-    Masking, Multiply)
+    Masking, Multiply, Cropping1D)
 
 # Qkeras
 from qkeras.quantizers import quantized_bits, quantized_relu
@@ -11,7 +11,7 @@ from qkeras.qlayers import QDense, QActivation
 from qkeras import QConv1D
 
 
-def baseline(inputs_shape, output_shape, n_filters, bits=9, bits_int=2, alpha_val=1):
+def baseline(inputs_shape, output_shape, n_filters, n_constituents, bits=9, bits_int=2, alpha_val=1):
 
     # Define a dictionary for common arguments
     common_args = {
@@ -21,11 +21,14 @@ def baseline(inputs_shape, output_shape, n_filters, bits=9, bits_int=2, alpha_va
     }
 
     #Initialize inputs
-    inputs = tf.keras.layers.Input(shape=inputs_shape[0], name='model_input')
-    inputs_mask = tf.keras.layers.Input(shape=inputs_shape[1], name='mask_input')
+    inputs = tf.keras.layers.Input(shape=inputs_shape, name='model_input')
+
+    # split into main and mask inputs
+    main_inp = Cropping1D(cropping=(0, n_constituents))(inputs)
+    mask_inp = Cropping1D(cropping=(n_constituents, 0))(inputs)
 
     #Main branch
-    main = BatchNormalization(name='norm_input')(inputs)
+    main = BatchNormalization(name='norm_input')(main_inp)
 
     #First Conv1D
     main = QConv1D(filters=10, kernel_size=1, name='Conv1D_1', **common_args)(main)
@@ -39,7 +42,7 @@ def baseline(inputs_shape, output_shape, n_filters, bits=9, bits_int=2, alpha_va
     main = QActivation(activation='quantized_bits(18,8)', name = 'act_pool')(main)
 
     # Masking through multiplication
-    main = Multiply()([main, inputs_mask])
+    main = Multiply()([main, mask_inp])
     main = GlobalAveragePooling1D(name='avgpool')(main)
 
     #Now split into jet ID and pt regression
@@ -64,7 +67,7 @@ def baseline(inputs_shape, output_shape, n_filters, bits=9, bits_int=2, alpha_va
                         kernel_initializer='lecun_uniform')(pt_regress)
 
     #Define the model using both branches
-    model = tf.keras.Model(inputs = [inputs, inputs_mask], outputs = [jet_id, pt_regress])
+    model = tf.keras.Model(inputs = inputs, outputs = [jet_id, pt_regress])
 
     print(model.summary())
 

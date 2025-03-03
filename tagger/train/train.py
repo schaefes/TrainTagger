@@ -26,7 +26,7 @@ I_SPARSITY = 0.0 #Initial sparsity
 F_SPARSITY = 0.1 #Final sparsity
 
 # Number of filters in the last convolutional layer
-N_FILTERS = 10
+N_FILTERS = 20
 
 def prune_model(model, num_samples):
     """
@@ -136,6 +136,7 @@ def train(out_dir, percent, model_name):
 
     #Make into ML-like data for training
     X_train, y_train, pt_target_train, truth_pt_train, reco_pt_train = to_ML(data_train, class_labels)
+    n_constituents = X_train.shape[1]
 
     #Save X_test, y_test, and truth_pt_test for plotting later
     X_test, y_test, _, truth_pt_test, reco_pt_test = to_ML(data_test, class_labels)
@@ -143,6 +144,8 @@ def train(out_dir, percent, model_name):
     # Create input mask from training data
     X_train_mask = get_input_mask(X_train, N_FILTERS)
     X_test_mask = get_input_mask(X_test, N_FILTERS)
+    X_train = np.concatenate([X_train, X_train_mask], axis=1)
+    X_test = np.concatenate([X_test, X_test_mask], axis=1)
 
     save_test_data(out_dir, X_test, y_test, X_test_mask, truth_pt_test, reco_pt_test, class_labels)
 
@@ -150,13 +153,13 @@ def train(out_dir, percent, model_name):
     sample_weight = train_weights(y_train, truth_pt_train, class_labels)
 
     #Get input shape
-    input_shape = [X_train.shape[1:], X_train_mask.shape[1:]] #First dimension is batch size
+    input_shape = X_train.shape[1:] #First dimension is batch size
     output_shape = y_train.shape[1:]
 
     #Dynamically get the model
     try:
         model_func = getattr(models, model_name)
-        model = model_func(input_shape, output_shape, N_FILTERS)  # Assuming the model function doesn't require additional arguments
+        model = model_func(input_shape, output_shape, N_FILTERS, n_constituents)  # Assuming the model function doesn't require additional arguments
     except AttributeError:
         raise ValueError(f"Model '{model_name}' is not defined in the 'models' module.")
 
@@ -169,7 +172,7 @@ def train(out_dir, percent, model_name):
                  EarlyStopping(monitor='val_loss', patience=10),
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
-    history = pruned_model.fit({'model_input': X_train, 'mask_input': X_train_mask},
+    history = pruned_model.fit({'model_input': X_train},
                             {'prune_low_magnitude_jet_id_output': y_train, 'prune_low_magnitude_pT_output': pt_target_train},
                             sample_weight=sample_weight,
                             epochs=EPOCHS,
