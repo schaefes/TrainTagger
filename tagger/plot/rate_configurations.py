@@ -50,12 +50,20 @@ def quadjet_ht(jet_pt, jet_eta, jet_btag, n_jets):
 
     return mask, n_passed
 
-def bbtautau_seed(jet_pt, jet_eta, jet_btag, n_jets):
-    pt_cuts = [25]*4
-    pt_mask = np.array([True]*len(jet_pt))
-    for i, pt in enumerate(pt_cuts):
-        mask = jet_ptl1(jet_pt[:,i], jet_eta[:,i], pt)
-        pt_mask = pt_mask & mask
+def bbtautau_seed(jet_pt, tau_pt):
+    # tau pt thresholds L1_DoubleIsoTau34er2p1
+    tau_pt = ak.sort(tau_pt, axis=1, ascending=False)
+    tau_pt1 = (tau_pt[:, 0] >= 34)
+    tau_pt2 = (tau_pt[:, 1] >= 34)
+    tau_pt_mask = tau_pt1 & tau_pt2
+
+    ht = ak.sum(jet_pt, axis=1)
+    ht_mask = ht > 200
+
+    mask = tau_pt_mask & ht_mask
+    n_passed = np.sum(mask)
+
+    return mask, n_passed
 
 
 # translate offline to online and return mask of matching objects
