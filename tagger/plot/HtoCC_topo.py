@@ -236,8 +236,9 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     ht_axis = hist.axis.Variable(ht_egdes, name = r"$HT^{gen}$")
 
     #Check if the working point have been derived
-    WP_tagger = os.path.join(tagger_dir, f"plots/physics/cc_topo/working_point_{round(rate)}_{tag_sum}.json")
-    WP_topo = os.path.join(topo_dir, f"plots/physics/cc_topo/working_point_{round(rate)}_{tag_sum}.json")
+    from IPython import embed; embed()
+    WP_tagger = os.path.join(tagger_dir, f"plots/physics/cc/working_point_{round(rate)}_{tag_sum}.json")
+    WP_topo = os.path.join(topo_dir, f"plots/physics/cc/working_point_{round(rate)}_{tag_sum}.json")
 
     #Get derived working points
     if os.path.exists(WP_tagger) & os.path.exists(WP_topo):
