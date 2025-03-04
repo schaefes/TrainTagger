@@ -24,8 +24,8 @@ def baseline(inputs_shape, output_shape, n_filters, n_constituents, bits=9, bits
     inputs = tf.keras.layers.Input(shape=inputs_shape, name='model_input')
 
     # split into main and mask inputs
-    main_inp = Cropping1D(cropping=(0, n_constituents))(inputs)
-    mask_inp = Cropping1D(cropping=(n_constituents, 0))(inputs)
+    main_inp = Cropping1D(cropping=(0, n_constituents), name='inp_crop')(inputs)
+    mask_inp = Cropping1D(cropping=(n_constituents, 0), name='mask_crop')(inputs)
 
     #Main branch
     main = BatchNormalization(name='norm_input')(main_inp)
