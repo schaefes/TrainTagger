@@ -108,7 +108,7 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
     with open(os.path.join(f"tagger/output/physics/cc_rates/{seed_name}_rate.json"), "r") as f: rate = json.load(f)
     target_rate = rate['rate']
 
-    tagger_model=load_qmodel(os.path.join(tagger_dir, "model/saved_model.h5"))
+    tagger_model = load_qmodel(os.path.join(tagger_dir, "model/saved_model.h5"))
     topo_model = load_qmodel(os.path.join(topo_dir, "model.h5"))
 
     #Load input/ouput variables of the NN
@@ -121,9 +121,6 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
 
     #Load the minbias data
     minbias = uproot.open(minbias_path)[tree]
-
-    # topo trigger data
-    n_features = topo_model.get_layer('avgpool').input_shape[-1]
 
     raw_event_id = extract_array(minbias, 'event', n_entries)
     raw_jet_pt = extract_array(minbias, 'jet_pt', n_entries)
@@ -142,6 +139,7 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
 
     # configurations for the nn type used for the WPs
     if nn_type == "topo":
+        n_features = topo_model.get_layer('avgpool').input_shape[-1]
         n_jets = ak.num(jet_nn_inputs, axis=1)
         flat_jets = np.asarray(ak.flatten(jet_nn_inputs, axis=1))
         tagger_preds = tagger_model.predict(flat_jets)[0]
@@ -220,6 +218,8 @@ def derive_rate(minbias_path, seed_name, n_entries=100000, tree='jetntuple/Jets'
     with open(os.path.join(rate_dir, f"{seed_name}_rate.json"), "w") as f:
         json.dump(rate, f, indent=4)
 
+    print(f'Derived rate for seed {seed_name}:', rate)
+
     return
 
 def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=100000, tree='outnano/Jets'):
@@ -236,7 +236,6 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     ht_axis = hist.axis.Variable(ht_egdes, name = r"$HT^{gen}$")
 
     #Check if the working point have been derived
-    from IPython import embed; embed()
     WP_tagger = os.path.join(tagger_dir, f"plots/physics/cc/working_point_{round(rate)}_{tag_sum}.json")
     WP_topo = os.path.join(topo_dir, f"plots/physics/cc/working_point_{round(rate)}_{tag_sum}.json")
 
@@ -262,8 +261,12 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     raw_cmssw_bscore = extract_array(signal, 'jet_bjetscore', n_entries)
 
     # Load the inputs
-    with open(os.path.join(model_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
-    with open(os.path.join(model_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
+    with open(os.path.join(tagger_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
+    with open(os.path.join(tagger_dir, "class_label.json"), "r") as f: tagger_labels = json.load(f)
+    with open(os.path.join(topo_dir, "class_label.json"), "r") as f: topo_labels = json.load(f)
+
+    cc_topo_idx = topo_labels['VBFHToCC_PU200']
+    bb_topo_idx = topo_labels['VBFHToBB_PU200']
 
     raw_inputs = extract_nn_inputs(signal, input_vars, n_entries=n_entries)
 
@@ -276,17 +279,18 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     jet_ht = ak.sum(jet_pt, axis=1)
 
     # Topo scores
+    n_features = topo_model.get_layer('avgpool').input_shape[-1]
     n_jets = ak.num(jet_nn_inputs, axis=1)
     flat_jets = np.asarray(ak.flatten(jet_nn_inputs, axis=1))
     tagger_preds = tagger_model.predict(flat_jets)[0]
     jet_preds = ak.unflatten(tagger_preds, n_jets)
-    topo_inputs = topo_input(minbias, jet_preds, tagger_labels, n_features, n_entries)
+    topo_inputs = topo_input(signal, jet_preds, tagger_labels, n_features, n_entries)
     topo_outputs = topo_model.predict(topo_inputs)
     topo_score = return_sum_score(topo_outputs[:, cc_topo_idx], topo_outputs[:, bb_topo_idx], tag_sum)
 
     # Tagger scores
     nn_outputs_tagger = [jet_preds[:, i] for i in range(0,2)]
-    tagger_score = nn_score_sum(nn_outputs_tagger, class_labels, tag_sum)
+    tagger_score = nn_score_sum(nn_outputs_tagger, tagger_labels, tag_sum)
 
     seeds_function = getattr(rate_configurations, seed_name)
     cmssw_selection, _ = seeds_function(jet_pt, jet_eta, cmssw_bscore, 2)
@@ -335,10 +339,12 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     plt.legend(loc='upper left')
 
     #Save plot
-    plot_path = os.path.join(model_dir, f"plots/physics/topo_cc/Hcc_eff_{seed_name}_{tag_sum}")
-    plt.savefig(f'{plot_path}.pdf', bbox_inches='tight')
-    plt.savefig(f'{plot_path}.png', bbox_inches='tight')
-    plt.show(block=False)
+    tagger_path = os.path.join(tagger_dir, f"plots/physics/cc/Hcc_eff_{seed_name}_{tag_sum}")
+    topo_path = os.path.join(topo_dir, f"plots/physics/cc/Hcc_eff_{seed_name}_{tag_sum}")
+    for plot_path in [tagger_path, topo_path]:
+        plt.savefig(f'{plot_path}.pdf', bbox_inches='tight')
+        plt.savefig(f'{plot_path}.png', bbox_inches='tight')
+        plt.show(block=False)
 
 
 if __name__ == "__main__":
