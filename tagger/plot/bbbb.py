@@ -22,7 +22,7 @@ from scipy.interpolate import interp1d
 from tagger.data.tools import extract_array, extract_nn_inputs, group_id_values
 from common import MINBIAS_RATE, WPs_CMSSW, find_rate, plot_ratio, get_bar_patch_data
 
-def nn_bscore_sum(model, jet_nn_inputs, n_jets=4, b_index = 1):
+def nn_bscore_sum(model, jet_nn_inputs, n_jets=4, b_index=1):
 
     #Get the inputs for the first n_jets
     btag_inputs = [np.asarray(jet_nn_inputs[:, i]) for i in range(0, n_jets)]
@@ -35,7 +35,7 @@ def nn_bscore_sum(model, jet_nn_inputs, n_jets=4, b_index = 1):
 
     return bscore_sum
 
-def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
+def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate=14):
     """
     Pick the working points and plot
     """

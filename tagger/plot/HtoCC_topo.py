@@ -34,9 +34,9 @@ def return_sum_score(c_score, b_score, tag_sum):
     elif tag_sum == 'b':
         return b_score
 
-def nn_score_sum(nn_outputs, indices, tag_sum):
-    b_index = indices['b']
-    c_index = indices['charm']
+def nn_score_sum(nn_outputs, class_labels, tag_sum):
+    b_index = class_labels['b']
+    c_index = class_labels['charm']
 
     bscore_sum = sum([pred_score[:, b_index] for pred_score in nn_outputs])
     cscore_sum = sum([pred_score[:, c_index] for pred_score in nn_outputs])
@@ -143,7 +143,7 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
         n_jets = ak.num(jet_nn_inputs, axis=1)
         flat_jets = np.asarray(ak.flatten(jet_nn_inputs, axis=1))
         tagger_preds = tagger_model.predict(flat_jets)[0]
-        jet_preds = ak.unflatten(tagger_preds, n_jets)[:,:,:6]
+        jet_preds = ak.unflatten(tagger_preds, n_jets)
         topo_inputs = topo_input(minbias, jet_preds, tagger_labels, n_features, n_entries)
         topo_outputs = topo_model.predict(topo_inputs)
         nn_score = return_sum_score(topo_outputs[:, cc_topo_idx], topo_outputs[:, bb_topo_idx], tag_sum)
@@ -272,8 +272,18 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     jet_genht = ak.sum(jet_genpt, axis=1)
     jet_ht = ak.sum(jet_pt, axis=1)
 
-    # Model scores
-    model_score_sum = nn_score_sum(model, jet_nn_inputs, class_labels, tag_sum)
+    # Topo scores
+    n_jets = ak.num(jet_nn_inputs, axis=1)
+    flat_jets = np.asarray(ak.flatten(jet_nn_inputs, axis=1))
+    tagger_preds = tagger_model.predict(flat_jets)[0]
+    jet_preds = ak.unflatten(tagger_preds, n_jets)
+    topo_inputs = topo_input(minbias, jet_preds, tagger_labels, n_features, n_entries)
+    topo_outputs = topo_model.predict(topo_inputs)
+    nn_score = return_sum_score(topo_outputs[:, cc_topo_idx], topo_outputs[:, bb_topo_idx], tag_sum)
+
+    # Tagger scores
+    nn_outputs_tagger = [jet_preds[:, i] for i in range(0,2)]
+    tagger_score_sum = nn_score_sum(model, jet_nn_inputs, class_labels, tag_sum)
 
     seeds_function = getattr(rate_configurations, seed_name)
     cmssw_selection, _ = seeds_function(jet_pt, jet_eta, cmssw_bscore, 2)
