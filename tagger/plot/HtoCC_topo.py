@@ -34,9 +34,11 @@ def return_sum_score(c_score, b_score, tag_sum):
     elif tag_sum == 'b':
         return b_score
 
-def nn_score_sum(nn_outputs, class_labels, tag_sum):
+def nn_score_sum(nn_outputs, class_labels, tag_sum, njets=2):
     b_index = class_labels['b']
     c_index = class_labels['charm']
+
+    nn_outputs = nn_outputs[:njets]
 
     bscore_sum = sum([pred_score[:, b_index] for pred_score in nn_outputs])
     cscore_sum = sum([pred_score[:, c_index] for pred_score in nn_outputs])
@@ -279,41 +281,48 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     jet_preds = ak.unflatten(tagger_preds, n_jets)
     topo_inputs = topo_input(minbias, jet_preds, tagger_labels, n_features, n_entries)
     topo_outputs = topo_model.predict(topo_inputs)
-    nn_score = return_sum_score(topo_outputs[:, cc_topo_idx], topo_outputs[:, bb_topo_idx], tag_sum)
+    topo_score = return_sum_score(topo_outputs[:, cc_topo_idx], topo_outputs[:, bb_topo_idx], tag_sum)
 
     # Tagger scores
     nn_outputs_tagger = [jet_preds[:, i] for i in range(0,2)]
-    tagger_score_sum = nn_score_sum(model, jet_nn_inputs, class_labels, tag_sum)
+    tagger_score = nn_score_sum(nn_outputs_tagger, class_labels, tag_sum)
 
     seeds_function = getattr(rate_configurations, seed_name)
     cmssw_selection, _ = seeds_function(jet_pt, jet_eta, cmssw_bscore, 2)
-    model_selection = (jet_ht > tag_ht_wp) & (model_score_sum > tag_wp)
+    tagger_selection = (jet_ht > tagger_ht_wp) & (tagger_score > tagger_wp)
+    topo_selection = (jet_ht > topo_ht_wp) & (topo_score > topo_wp)
 
     #PLot the efficiencies
     #Basically we want to bin the selected truth ht and divide it by the overall count
     all_events = Hist(ht_axis)
     cmssw_selected_events = Hist(ht_axis)
-    model_selected_events = Hist(ht_axis)
+    tagger_selected_events = Hist(ht_axis)
+    topo_selected_events = Hist(ht_axis)
 
     all_events.fill(jet_genht)
     cmssw_selected_events.fill(jet_genht[cmssw_selection])
-    model_selected_events.fill(jet_genht[model_selection])
+    tagger_selected_events.fill(jet_genht[tagger_selection])
+    topo_selected_events.fill(jet_genht[topo_selection])
 
     #Plot the ratio
     eff_cmssw = plot_ratio(all_events, cmssw_selected_events)
-    eff_model = plot_ratio(all_events, model_selected_events)
+    eff_tagger = plot_ratio(all_events, tagger_selected_events)
+    eff_topo = plot_ratio(all_events, topo_selected_events)
 
     #Get data from handles
     cmssw_x, cmssw_y, cmssw_err = get_bar_patch_data(eff_cmssw)
-    model_x, model_y, model_err = get_bar_patch_data(eff_model)
+    tagger_x, tagger_y, tagger_err = get_bar_patch_data(eff_tagger)
+    topo_x, topo_y, topo_err = get_bar_patch_data(eff_topo)
 
     #Now plot all
     fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
     ax.errorbar(cmssw_x, cmssw_y, yerr=cmssw_err, c=style.color_cycle[0], fmt='o', linewidth=3,
         label=r'btag CMSSW Emulator @ {} kHz ({} seed)'.format(rate, seed_name))
-    ax.errorbar(model_x, model_y, yerr=model_err, c=style.color_cycle[1], fmt='o', linewidth=3,
-        label=r'Multiclass @ {} kHz (L1 $HT$ > {} GeV, $\sum$ {} > {})'.format(rate, tag_ht_wp, tag_sum, round(tag_wp,2)))
+    ax.errorbar(tagger_x, tagger_y, yerr=tagger_err, c=style.color_cycle[1], fmt='o', linewidth=3,
+        label=r'Multiclass Jet Tagger @ {} kHz (L1 $HT$ > {} GeV, $\sum$ {} > {})'.format(rate, tagger_ht_wp, tag_sum, round(tagger_wp,2)))
+    ax.errorbar(topo_x, topo_y, yerr=topo_err, c=style.color_cycle[2], fmt='o', linewidth=3,
+        label=r'Multiclass Topo Tagger @ {} kHz (L1 $HT$ > {} GeV, {} > {})'.format(rate, topo_ht_wp, tag_sum, round(topo_wp,2)))
 
     #Plot other labels
     ax.hlines(1, 0, 800, linestyles='dashed', color='black', linewidth=4)
