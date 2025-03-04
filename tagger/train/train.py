@@ -129,6 +129,19 @@ def train_weights(y_train, truth_pt_train, class_labels, pt_flat_weighting=True)
     # Normalize sample weights
     sample_weights = sample_weights / np.mean(sample_weights)
 
+def get_input_mask(X_data, repeat_shape=N_FILTERS):
+    # Create input mask from training data
+    inputs_mask = np.where(np.sum(X_data, axis=2)==0, 0, X_data.shape[1])
+    inputs_count = np.sum(np.where(np.sum(X_data, axis=2)==0, 0, 1), axis=1)
+
+    # Normalize using constituents multiplicity, enforces averaging over real constituents in the model
+    inputs_mask = inputs_mask / inputs_count[:, np.newaxis]
+
+    # Mask shape must mathc the nn shape before the average poolinng layer
+    inputs_mask = np.repeat(inputs_mask[:, :,np.newaxis], repeat_shape, axis=2)
+
+    return inputs_mask
+
 def train(out_dir, percent, model_name):
 
     #Remove output dir if exists
@@ -165,7 +178,7 @@ def train(out_dir, percent, model_name):
     sample_weight = train_weights(y_train, truth_pt_train, class_labels)
 
     #Get input shape
-    input_shape = X_train.shape[1:] #First dimension is batch size
+    input_shape = [X_train.shape[1:], X_train_mask.shape[1:]] #First dimension is batch size
     output_shape = y_train.shape[1:]
 
     #Dynamically get the model
@@ -184,7 +197,7 @@ def train(out_dir, percent, model_name):
                  EarlyStopping(monitor='val_loss', patience=10),
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
-    history = pruned_model.fit({'model_input': X_train},
+    history = pruned_model.fit({'model_input': X_train, 'mask_input': X_train_mask},
                             {'prune_low_magnitude_jet_id_output': y_train, 'prune_low_magnitude_pT_output': pt_target_train},
                             sample_weight=sample_weight,
                             epochs=EPOCHS,

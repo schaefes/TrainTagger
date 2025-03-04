@@ -485,12 +485,13 @@ def basic(model_dir):
     #Load the testing data
     X_test = np.load(f"{model_dir}/testing_data/X_test.npy")
     y_test = np.load(f"{model_dir}/testing_data/y_test.npy")
+    X_test_mask = np.load(f"{model_dir}/testing_data/X_test_mask.npy")
     truth_pt_test = np.load(f"{model_dir}/testing_data/truth_pt_test.npy")
     reco_pt_test = np.load(f"{model_dir}/testing_data/reco_pt_test.npy")
 
     #Load model
     model = load_qmodel(f"{model_dir}/model/saved_model.h5")
-    model_outputs = model.predict(X_test)
+    model_outputs = model.predict([X_test, X_test_mask])
 
     #Get classification outputs
     y_pred = model_outputs[0]
