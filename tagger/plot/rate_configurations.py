@@ -51,21 +51,18 @@ def quadjet_ht(jet_pt, jet_eta, jet_btag, n_jets):
     return mask, n_passed
 
 def vbf_inclusive(jet_pt, jet_eta, jet_btag, n_jets):
-    jet_num = ak.num(jets, axis=1) > 1
-    jets = jets[jet_num]
-
-    jet1_pt_barrel = barrel_ptl1(160, jets.pt[:,0], jets.eta[:,0])
-    jet1_pt_endcap = endcap_ptl1(160, jets.pt[:,0], jets.eta[:,0])
-    jet1_pt_forward = forward_ptl1(160, jets.pt[:,0], jets.eta[:,0])
+    jet1_pt_barrel = barrel_ptl1(160, jets_pt[:,0], jets_eta[:,0])
+    jet1_pt_endcap = endcap_ptl1(160, jets_pt[:,0], jets_eta[:,0])
+    jet1_pt_forward = forward_ptl1(160, jets_pt[:,0], jets_eta[:,0])
     jet1_pt = jet1_pt_barrel | jet1_pt_endcap | jet1_pt_forward
 
-    jet2_pt_barrel = barrel_ptl1(35, jets.pt[:,1], jets.eta[:,1])
-    jet2_pt_endcap = endcap_ptl1(35, jets.pt[:,1], jets.eta[:,1])
-    jet2_pt_forward = forward_ptl1(35, jets.pt[:,1], jets.eta[:,1])
+    jet2_pt_barrel = barrel_ptl1(35, jets_pt[:,1], jets_eta[:,1])
+    jet2_pt_endcap = endcap_ptl1(35, jets_pt[:,1], jets_eta[:,1])
+    jet2_pt_forward = forward_ptl1(35, jets_pt[:,1], jets_eta[:,1])
     jet2_pt = jet2_pt_barrel | jet2_pt_endcap | jet2_pt_forward
 
-    jet1_eta = abs(jets.eta[:, 0]) < 5
-    jet2_eta = abs(jets.eta[:, 1]) < 5
+    jet1_eta = abs(jets_eta[:, 0]) < 5
+    jet2_eta = abs(jets_eta[:, 1]) < 5
 
     mjj = (jets[:, 0] + jets[:, 1]).mass > 620
 
@@ -74,7 +71,7 @@ def vbf_inclusive(jet_pt, jet_eta, jet_btag, n_jets):
 
     return mask, n_passed
 
-def bbtautau_seed(jet_pt, tau_pt):
+def bbtt_seed(jet_pt, tau_pt):
     # tau pt thresholds L1_DoubleIsoTau34er2p1
     tau_pt = ak.sort(tau_pt, axis=1, ascending=False)
     tau_pt1 = (tau_pt[:, 0] >= 34)
@@ -82,7 +79,7 @@ def bbtautau_seed(jet_pt, tau_pt):
     tau_pt_mask = tau_pt1 & tau_pt2
 
     ht = ak.sum(jet_pt, axis=1)
-    ht_mask = ht > 200
+    ht_mask = ht > 220
 
     mask = tau_pt_mask & ht_mask
     n_passed = np.sum(mask)

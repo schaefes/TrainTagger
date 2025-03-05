@@ -21,6 +21,7 @@ from scipy.interpolate import interp1d
 #Imports from other modules
 from tagger.data.tools import extract_array, extract_nn_inputs, group_id_values
 from common import MINBIAS_RATE, WPs_CMSSW, find_rate, plot_ratio, get_bar_patch_data
+import rate_configurations
 
 def nn_score_sum(model, jet_nn_inputs, n_jets, score_index):
 
@@ -35,30 +36,10 @@ def nn_score_sum(model, jet_nn_inputs, n_jets, score_index):
 
     return score_sum
 
-def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
+def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, target_rate):
     """
     Pick the working points and plot
     """
-
-    plot_dir = os.path.join(model_dir, 'plots/physics/bbbb')
-    os.makedirs(plot_dir, exist_ok=True)
-
-    fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
-    hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
-    im = ax.scatter(nn_list, ht_list, c=rate_list, s=500, marker='s',
-                    cmap='Spectral_r',
-                    linewidths=0,
-                    norm=matplotlib.colors.LogNorm())
-
-    cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label(r'4-b rate [kHZ]')
-
-    ax.set_ylabel(r"HT [GeV]")
-    ax.set_xlabel(r"$\sum_{4~leading~jets}$ b scores")
-
-    ax.set_xlim([0,2.5])
-    ax.set_ylim([10,500])
-
     #plus, minus range
     RateRange = 0.5
 
@@ -66,33 +47,82 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
     target_rate_idx = find_rate(rate_list, target_rate = target_rate, RateRange=RateRange)
 
     #Get the coordinates
-    target_rate_NN = [nn_list[i] for i in target_rate_idx] # NN cut dimension
-    target_rate_HT = [ht_list[i] for i in target_rate_idx] # HT cut dimension
+    target_rate_bb = [bb_list[i] for i in target_rate_idx] # NN cut dimension
+    target_rate_tt = [tt_list[i] for i in target_rate_idx] # NN cut dimension
+    target_rate_HT = [ht_list[i] for i in target_rate_idx]
+    target_bb = target_rate_bb[target_rate_ht==WPs_CMSSW['btag_l1_ht']]
+    target_tt = target_rate_tt[target_rate_ht==WPs_CMSSW['btag_l1_ht']] # HT cut dimension
 
-    # Create an interpolation function
-    interp_func = interp1d(target_rate_HT, target_rate_NN, kind='linear', fill_value='extrapolate')
+    # Get the signal predictions and class labels
+    signal_preds, n_events = make_predictions(signal_path, model_dir)
+    with open(os.path.join(model_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
 
-    # Interpolate the NN value for the desired HT
-    working_point_NN = interp_func(WPs_CMSSW['btag_l1_ht'])
+    #Calculate the output sum
+    b_index = class_labels['b']
+    taup_index = class_labels['taup']
+    taum_index = class_labels['taum']
+    b_preds = np.transpose([pred_score[0][:, b_index] for pred_score in signal_preds])
+    bscore_sum = np.sum(ak.sort(b_preds, axis=1, ascending=False)[:,:2], axis=1)
+    taup_preds = np.transpose([pred_score[0][:, taup_index] for pred_score in signal_preds])
+    taum_preds = np.transpose([pred_score[0][:, taum_index] for pred_score in signal_preds])
+    tscore_sum = ak.max(taup_preds, axis=1) + ak.max(taum_preds, axis=1)
+    event_ht = ak.sum(jet_pt, axis=1)
+
+    # Calculate the efficiency
+    target_rate_eff = []
+    for ht, bb, tt in zip(target_rate_ht, target_rate_bb, target_rate_tt):
+        ht_mask = event_ht > ht
+        bb_mask = bscore_sum > bb
+        tt_mask = tscore_sum > tt
+        mask = ht_mask & bb_mask & tt_mask
+        eff = np.sum(mask) / n_events
+        target_rate_eff.append(eff)
+    # get max efficiency at target HT
+    target_eff = target_rate_eff[target_rate_ht==WPs_CMSSW['btag_l1_ht']]
+    wp_max_eff_idx = np.argmax(target_rate_eff)
+    wp_ht_eff_idx = np.argmax(target_rate_eff[target_rate_ht==WPs_CMSSW['btag_l1_ht']])
+
 
     # Export the working point
-    working_point = {"HT": WPs_CMSSW['btag_l1_ht'], "NN": float(working_point_NN)}
-    with open(os.path.join(plot_dir, "bbbb_working_point.json"), "w") as f:
-        json.dump(working_point, f, indent=4)
+    max_wp = {"HT": target_rate_ht[wp_max_eff_idx], "BB": target_rate_bb[wp_max_eff_idx],
+        "TT": target_rate_tt[wp_max_eff_idx]}
+    fixed_ht_wp = {"HT": WPs_CMSSW['btag_l1_ht'], "BB": target_bb[wp_ht_eff_idx],
+        "TT": target_tt[wp_ht_eff_idx]}
 
-    ax.plot(target_rate_NN, target_rate_HT,
-                linewidth=5,
-                color ='firebrick',
-                label = r"${} \pm {}$ kHz".format(target_rate, RateRange))
+    # save WPs
+    plot_dir = os.path.join(model_dir, 'plots/physics/bbtt')
+    os.makedirs(plot_dir, exist_ok=True)
+    with open(os.path.join(plot_dir, "bbtt_max_wp.json"), "w") as f:
+        json.dump(max_wp, f, indent=4)
+    with open(os.path.join(plot_dir, "bbtt_fixed_ht_wp.json"), "w") as f:
+        json.dump(fixed_ht_wp, f, indent=4)
+
+    # plot
+    fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+    hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
+    im = ax.scatter(target_bb, target_tt, c=target_eff, s=500, marker='s',
+                    cmap='Spectral_r',
+                    linewidths=0,
+                    norm=matplotlib.colors.LogNorm())
+
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label(f"Efficiency at HT={WPs_CMSSW['btag_l1_ht']}, {target_rate} [kHZ]")
+
+    ax.set_ylabel(r"$\sum_{\tau^{+}_{max}\tau^{-}_{max}}$ scores")
+    ax.set_xlabel(r"$\sum_{2~leading~jets}$ b scores")
+
+    ax.set_xlim([0,2])
+    ax.set_ylim([0,2])
 
     ax.legend(loc='upper right')
-    plt.savefig(f"{plot_dir}/bbbb_rate.pdf", bbox_inches='tight')
-    plt.savefig(f"{plot_dir}/bbbb_rate.png", bbox_inches='tight')
+    plt.savefig(f"{plot_dir}/bbtt_rate.pdf", bbox_inches='tight')
+    plt.savefig(f"{plot_dir}/bbtt_rate.png", bbox_inches='tight')
 
 
 def derive_rate(minbias_path, seed_name, n_entries=100000, tree='jetntuple/Jets'):
 
     minbias = uproot.open(minbias_path)[tree]
+    from IPython import embed; embed()
 
     raw_event_id = extract_array(minbias, 'event', n_entries)
     raw_cmssw_bscore = extract_array(minbias, 'jet_bjetscore', n_entries)
@@ -119,12 +149,41 @@ def derive_rate(minbias_path, seed_name, n_entries=100000, tree='jetntuple/Jets'
 
     return
 
-def derive_bbtt_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree='outnano/Jets'):
+def make_predictions(data_path, model_path, tree='outnano/Jets', njets=4):
+    data = uproot.open(data_path)[tree]
+
+    model = load_qmodel(os.path.join(model_dir, "model/saved_model.h5"))
+
+    #Load input/ouput variables of the NN
+    with open(os.path.join(model_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
+    with open(os.path.join(model_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
+
+    raw_event_id = extract_array(data, 'event', n_entries)
+    raw_jet_pt = extract_array(data, 'jet_pt', n_entries)
+    raw_inputs = extract_nn_inputs(data, input_vars, n_entries=n_entries)
+
+    #Count number of total event
+    n_events = len(np.unique(raw_event_id))
+
+    #Group these attributes by event id, and filter out groups that don't have at least 2 elements
+    event_id, grouped_arrays  = group_id_values(raw_event_id, raw_jet_pt, raw_inputs, num_elements=4)
+
+    # Extract the grouped arrays
+    # Jet pt is already sorted in the producer, no need to do it here
+    jet_pt, jet_nn_inputs = grouped_arrays
+
+    #Btag input list for first 4 jets
+    nn_outputs = [model.predict(np.asarray(jet_nn_inputs[:, i])) for i in range(0,njets)]
+
+    return nn_outputs, n_events
+
+
+def derive_bbtt_WPs(model_dir, minbias_path, signal_path, target_rate=14, n_entries=100, tree='outnano/Jets'):
     """
     Derive the HH->4b working points
     """
 
-    model=load_qmodel(os.path.join(model_dir, "model/saved_model.h5"))
+    model = load_qmodel(os.path.join(model_dir, "model/saved_model.h5"))
 
     #Load input/ouput variables of the NN
     with open(os.path.join(model_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
@@ -156,41 +215,46 @@ def derive_bbtt_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree
     taup_index = class_labels['taup']
     taum_index = class_labels['taum']
     b_preds = np.transpose([pred_score[0][:, b_index] for pred_score in nn_outputs])
+    bscore_sum = np.sum(ak.sort(b_preds, axis=1, ascending=False)[:,:2], axis=1)
     taup_preds = np.transpose([pred_score[0][:, taup_index] for pred_score in nn_outputs])
     taum_preds = np.transpose([pred_score[0][:, taum_index] for pred_score in nn_outputs])
+    tscore_sum = ak.max(taup_preds, axis=1) + ak.max(taum_preds, axis=1)
     ht = ak.sum(jet_pt, axis=1)
 
     assert(len(bscore_sum) == len(ht))
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(0,500,2)) + [10000] #Make sure to capture everything
-    tt_edges = list([round(i,2) for i in np.arange(0, 1.25, 0.01)]) + [2.0]
     bb_edges = list([round(i,2) for i in np.arange(0, 1.25, 0.01)]) + [2.0]
+    tt_edges = list([round(i,2) for i in np.arange(0, 1.25, 0.01)]) + [2.0]
 
     RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
-                    hist.axis.Variable(NN_edges, name="nn", label="nn"))
+                    hist.axis.Variable(NN_edges, name="nn_bb", label="nn_bb"),
+                    hist.axis.Variable(NN_edges, name="nn_tt", label="nn_tt"))
 
-    RateHist.fill(ht = ht, nn = bscore_sum)
+    RateHist.fill(ht = ht, nn_bb = bscore_sum, nn_tt = tscore_sum)
 
     #Derive the rate
     rate_list = []
     ht_list = []
-    nn_list = []
+    bb_list = []
+    tt_list = []
 
     #Loop through the edges and integrate
     for ht in ht_edges[:-1]:
-        for NN in NN_edges[:-1]:
+        for bb in NN_edges[:-1]:
+            for tt in NN_edges[:-1]:
+                #Calculate the rate
+                counts = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+                rate_list.append((counts / n_events)*MINBIAS_RATE)
 
-            #Calculate the rate
-            rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(NN*1.0j, None, sum)}]/n_events
-            rate_list.append(rate*MINBIAS_RATE)
-
-            #Append the results
-            ht_list.append(ht)
-            nn_list.append(NN)
+                #Append the results
+                ht_list.append(ht)
+                bb_list.append(bb)
+                tt_list.append(tt)
 
     #Pick target rate and plot it
-    pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate=target_rate)
+    pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, target_rate)
 
     return
 
@@ -209,7 +273,8 @@ def bbtt_eff_HT(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
     cmssw_btag_ht =  WPs_CMSSW['btag_l1_ht']
 
     #Check if the working point have been derived
-    WP_path = os.path.join(model_dir, "plots/physics/bbbb/bbbb_working_point.json")
+    WP_path = os.path.join(model_dir, "plots/physics/bbbb/bbtt_max_wp.json")
+    WP_path = os.path.join(model_dir, "plots/physics/bbbb/bbtt_fixed_ht_wp.json")
 
     #Get derived working points
     if os.path.exists(WP_path):

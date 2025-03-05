@@ -100,6 +100,7 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, rate):
     plt.savefig(f"{plot_dir}/cc_{rate}_{tag_sum}.pdf", bbox_inches='tight')
     plt.savefig(f"{plot_dir}/cc_rate_{rate}_{tag_sum}.png", bbox_inches='tight')
 
+
 def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
     nn_type, n_entries, tree='jetntuple/Jets'):
     """
@@ -116,8 +117,12 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
     with open(os.path.join(tagger_dir, "class_label.json"), "r") as f: tagger_labels = json.load(f)
     with open(os.path.join(topo_dir, "class_label.json"), "r") as f: topo_labels = json.load(f)
 
-    cc_topo_idx = topo_labels['VBFHToCC_PU200']
-    bb_topo_idx = topo_labels['VBFHToBB_PU200']
+    try:
+        cc_topo_idx = topo_labels['VBFHToCC_PU200']
+        bb_topo_idx = topo_labels['VBFHToBB_PU200']
+    except:
+        cc_topo_idx = topo_labels['VBFHToBBorCC_PU200']
+        bb_topo_idx = topo_labels['VBFHToBBorCC_PU200']
 
     #Load the minbias data
     minbias = uproot.open(minbias_path)[tree]
@@ -131,6 +136,7 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
     print("Total number of minbias events: ", n_events)
 
     #Group these attributes by event id, and filter out groups that don't have at least 4 elements
+    # 2 VBF Jets + 2 Higgs Decay Jets
     event_id, grouped_arrays  = group_id_values(raw_event_id, raw_jet_pt, raw_inputs, num_elements=4)
 
     # Extract the grouped arrays
@@ -264,9 +270,12 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     with open(os.path.join(tagger_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
     with open(os.path.join(tagger_dir, "class_label.json"), "r") as f: tagger_labels = json.load(f)
     with open(os.path.join(topo_dir, "class_label.json"), "r") as f: topo_labels = json.load(f)
-
-    cc_topo_idx = topo_labels['VBFHToCC_PU200']
-    bb_topo_idx = topo_labels['VBFHToBB_PU200']
+    try:
+        cc_topo_idx = topo_labels['VBFHToCC_PU200']
+        bb_topo_idx = topo_labels['VBFHToBB_PU200']
+    except:
+        cc_topo_idx = topo_labels['VBFHToBBorCC_PU200']
+        bb_topo_idx = topo_labels['VBFHToBBorCC_PU200']
 
     raw_inputs = extract_nn_inputs(signal, input_vars, n_entries=n_entries)
 
@@ -339,9 +348,11 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     plt.legend(loc='upper left')
 
     #Save plot
-    tagger_path = os.path.join(tagger_dir, f"plots/physics/cc/Hcc_eff_{seed_name}_{tag_sum}")
-    topo_path = os.path.join(topo_dir, f"plots/physics/cc/Hcc_eff_{seed_name}_{tag_sum}")
+    final_state = os.path.basename(signal_path).replace('_PU200.root', '').split('To')[-1].lower()
+    tagger_path = os.path.join(tagger_dir, f"plots/physics/{final_state}/Hcc_eff_{seed_name}_{tag_sum}")
+    topo_path = os.path.join(topo_dir, f"plots/physics/{final_state}/Hcc_eff_{seed_name}_{tag_sum}")
     for plot_path in [tagger_path, topo_path]:
+        os.makedirs(plot_path, exist_ok=True)
         plt.savefig(f'{plot_path}.pdf', bbox_inches='tight')
         plt.savefig(f'{plot_path}.png', bbox_inches='tight')
         plt.show(block=False)
@@ -358,7 +369,7 @@ if __name__ == "__main__":
     parser.add_argument('-tagger','--tagger_dir', default='output/baseline', help='Jet tagger model')
     parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4', help='Topo tagger model')
     parser.add_argument('-seed', '--seed_name', default='ht_btag', help='Decide which seed to compare to')
-    parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToCC_PU200.root', help='Signal sample for VBF->H->cc')
+    parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToCC_PU200.root', help='Signal sample for VBF->H->bb')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/MinBias_PU200.root', help='Minbias sample for deriving rates')
 
     #Different modes
