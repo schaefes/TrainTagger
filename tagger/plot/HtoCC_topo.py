@@ -38,10 +38,10 @@ def nn_score_sum(nn_outputs, class_labels, tag_sum, njets=2):
     b_index = class_labels['b']
     c_index = class_labels['charm']
 
-    nn_outputs = nn_outputs[:njets]
-
-    bscore_sum = sum([pred_score[:, b_index] for pred_score in nn_outputs])
-    cscore_sum = sum([pred_score[:, c_index] for pred_score in nn_outputs])
+    sorted_bscores = np.sort([pred_score[:, b_index] for pred_score in nn_outputs], axis=0)
+    bscore_sum = np.sum(sorted_bscores[:njets,:], axis=0)
+    sorted_cscores = np.sort([pred_score[:, c_index] for pred_score in nn_outputs], axis=0)
+    cscore_sum = np.sum(sorted_cscores[:njets,:], axis=0)
     sum_score = return_sum_score(cscore_sum, bscore_sum, tag_sum)
 
     return sum_score
@@ -156,14 +156,13 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
         model_dir = topo_dir
         max_score = 1
     elif nn_type == "tagger":
-        nn_outputs = [tagger_model.predict(np.asarray(jet_nn_inputs[:, i]))[0] for i in range(0,2)]
-        nn_score = nn_score_sum(nn_outputs, tagger_labels, tag_sum)
+        nn_outputs = [tagger_model.predict(np.asarray(jet_nn_inputs[:, i]))[0] for i in range(0,4)]
+        nn_score = nn_score_sum(nn_outputs, tagger_labels, tag_sum, 2)
         model_dir = tagger_dir
         max_score = 2
 
     #Calculate the output sum
     ht = ak.sum(jet_pt, axis=1)
-
     assert(len(nn_score) == len(ht))
 
     #Define the histograms (pT edge and NN Score edge)
@@ -242,8 +241,10 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     ht_axis = hist.axis.Variable(ht_egdes, name = r"$HT^{gen}$")
 
     #Check if the working point have been derived
+    final_state = os.path.basename(signal_path).replace('_PU200.root', '').split('To')[-1].lower()
     WP_tagger = os.path.join(tagger_dir, f"plots/physics/cc/working_point_{round(rate)}_{tag_sum}.json")
     WP_topo = os.path.join(topo_dir, f"plots/physics/cc/working_point_{round(rate)}_{tag_sum}.json")
+
 
     #Get derived working points
     if os.path.exists(WP_tagger) & os.path.exists(WP_topo):
@@ -298,8 +299,8 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     topo_score = return_sum_score(topo_outputs[:, cc_topo_idx], topo_outputs[:, bb_topo_idx], tag_sum)
 
     # Tagger scores
-    nn_outputs_tagger = [jet_preds[:, i] for i in range(0,2)]
-    tagger_score = nn_score_sum(nn_outputs_tagger, tagger_labels, tag_sum)
+    nn_outputs_tagger = [jet_preds[:, i] for i in range(0,4)]
+    tagger_score = nn_score_sum(nn_outputs_tagger, tagger_labels, tag_sum, 2)
 
     seeds_function = getattr(rate_configurations, seed_name)
     cmssw_selection, _ = seeds_function(jet_pt, jet_eta, cmssw_bscore, 2)
@@ -348,11 +349,10 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     plt.legend(loc='upper left')
 
     #Save plot
-    final_state = os.path.basename(signal_path).replace('_PU200.root', '').split('To')[-1].lower()
     tagger_path = os.path.join(tagger_dir, f"plots/physics/{final_state}/Hcc_eff_{seed_name}_{tag_sum}")
     topo_path = os.path.join(topo_dir, f"plots/physics/{final_state}/Hcc_eff_{seed_name}_{tag_sum}")
     for plot_path in [tagger_path, topo_path]:
-        os.makedirs(plot_path, exist_ok=True)
+        os.makedirs(os.path.dirname(plot_path), exist_ok=True)
         plt.savefig(f'{plot_path}.pdf', bbox_inches='tight')
         plt.savefig(f'{plot_path}.png', bbox_inches='tight')
         plt.show(block=False)
@@ -369,7 +369,7 @@ if __name__ == "__main__":
     parser.add_argument('-tagger','--tagger_dir', default='output/baseline', help='Jet tagger model')
     parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4', help='Topo tagger model')
     parser.add_argument('-seed', '--seed_name', default='ht_btag', help='Decide which seed to compare to')
-    parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToCC_PU200.root', help='Signal sample for VBF->H->bb')
+    parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToBB_PU200.root', help='Signal sample for VBF->H->bb')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/MinBias_PU200.root', help='Minbias sample for deriving rates')
 
     #Different modes

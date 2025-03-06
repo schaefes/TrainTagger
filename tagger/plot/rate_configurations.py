@@ -11,11 +11,10 @@ def ht_sum_btag(jet_pt, jet_eta, jet_btag, n_jets):
     # allow only events with jets that contain at least #n_jets btagged jets
     n_mask = ak.num(jet_pt) >= n_jets
 
-    btag_sum = ak.sum(jet_btag[:,:n_jets], axis=1)
+    btag_sum = ak.sum(ak.sort(jet_btag, ascending=False, axis=1)[:,:n_jets], axis=1)
 
     ht = ak.sum(jet_pt, axis=1)
-
-    mask = (ht > 220) & (btag_sum > (0.58 * n_jets))
+    mask = (ht > 220) & (btag_sum > (0.75 * n_jets))
     mask = mask & n_mask
     n_passed = np.sum(mask)
 
