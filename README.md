@@ -1,7 +1,16 @@
-<img src="https://github.com/user-attachments/assets/9eb9833f-0672-4aa8-a66f-8920393bc8e1" alt="CERN-LOGO" width="102">
-<img src="https://github.com/user-attachments/assets/ccb113aa-2050-4873-982a-e7aaffd5cf60" alt="NextGen" width="113">
-<img src="https://github.com/user-attachments/assets/960d9384-529b-45c3-b965-301820271d65" alt="CMSlogo" width="99"> 
-<img src="https://github.com/user-attachments/assets/00fd895b-dd4a-4f84-91df-42bd229e8506" alt="MIT-social-media-logo-white" width="99">
+<span>
+  <img src="logos/CERN_Logo.png" alt="CERNlogo" width="102">
+</span>
+<span>
+  <img src="logos/NextGen_Logo.png" alt="CMSlogo" width="113">
+</span>
+<span>
+  <img src="logos/CMS_Logo.png" alt="CMSlogo" width="99">
+</span>
+<span>
+  <img src="logos/MIT_Logo.png" alt="MIT-social-media-logo-white" width="99">
+</span>
+
 
 # Training Jet Taggers for CMS Phase 2 L1 Trigger
 
@@ -9,7 +18,7 @@ Documentation for training a L1T Jet Tagging model for CMS Phase-2 L1 upgrades.
 
 To train the jet tagger, there are multiple steps that one need to follow, from creating the raw datasets, preprocessing them, train the model, synthesize it, and make validation plots for different physics seeds. This README describes all the steps in a sequential manner.
 
-The CI in this repository aims at building a pipeline that enables running all of these steps automatically.
+The CI in this repository aims at building a pipeline that enables running all of these steps automatically. The CI artifacts are saved here: https://cms-l1t-jet-tagger.web.cern.ch/
 
 **A summary menu of all the steps is listed below**:
 
