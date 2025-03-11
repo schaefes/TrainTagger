@@ -38,9 +38,9 @@ def nn_score_sum(nn_outputs, class_labels, tag_sum, njets=2):
     b_index = class_labels['b']
     c_index = class_labels['charm']
 
-    sorted_bscores = np.sort([pred_score[:, b_index] for pred_score in nn_outputs], axis=0)
+    sorted_bscores = ak.sort([pred_score[:, b_index] for pred_score in nn_outputs], axis=0)[::-1]
     bscore_sum = np.sum(sorted_bscores[:njets,:], axis=0)
-    sorted_cscores = np.sort([pred_score[:, c_index] for pred_score in nn_outputs], axis=0)
+    sorted_cscores = np.sort([pred_score[:, c_index] for pred_score in nn_outputs], axis=0)[::-1]
     cscore_sum = np.sum(sorted_cscores[:njets,:], axis=0)
     sum_score = return_sum_score(cscore_sum, bscore_sum, tag_sum)
 
@@ -50,7 +50,7 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, rate):
     """
     Pick the working points and plot
     """
-    plot_dir = os.path.join(model_dir, 'plots/physics/cc')
+    plot_dir = os.path.join(model_dir, 'plots/physics/wps')
     os.makedirs(plot_dir, exist_ok=True)
 
     fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
@@ -242,8 +242,8 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
 
     #Check if the working point have been derived
     final_state = os.path.basename(signal_path).replace('_PU200.root', '').split('To')[-1].lower()
-    WP_tagger = os.path.join(tagger_dir, f"plots/physics/cc/working_point_{round(rate)}_{tag_sum}.json")
-    WP_topo = os.path.join(topo_dir, f"plots/physics/cc/working_point_{round(rate)}_{tag_sum}.json")
+    WP_tagger = os.path.join(tagger_dir, f"plots/physics/wps/working_point_{round(rate)}_{tag_sum}.json")
+    WP_topo = os.path.join(topo_dir, f"plots/physics/wps/working_point_{round(rate)}_{tag_sum}.json")
 
 
     #Get derived working points
@@ -367,7 +367,7 @@ if __name__ == "__main__":
     """
     parser = ArgumentParser()
     parser.add_argument('-tagger','--tagger_dir', default='output/baseline', help='Jet tagger model')
-    parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4', help='Topo tagger model')
+    parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4_cb', help='Topo tagger model')
     parser.add_argument('-seed', '--seed_name', default='ht_btag', help='Decide which seed to compare to')
     parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToBB_PU200.root', help='Signal sample for VBF->H->bb')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/MinBias_PU200.root', help='Minbias sample for deriving rates')
