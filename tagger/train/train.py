@@ -192,13 +192,13 @@ if __name__ == "__main__":
 
     #Making input arguments
     parser.add_argument('--make-data', action='store_true', help='Prepare the data if set.')
-    parser.add_argument('-i','--input', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/All200_part0.root' , help = 'Path to input training data')
+    parser.add_argument('-i','--input', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/All200_part0.root' , help = 'Path to input training data')
     parser.add_argument('-r','--ratio', default=1, type=float, help = 'Ratio (0-1) of the input data root file to process')
     parser.add_argument('-s','--step', default='100MB' , help = 'The maximum memory size to process input root file')
     parser.add_argument('-e','--extras', default='extra_fields', help= 'Which extra fields to add to output tuples, in pfcand_fields.yml')
 
     #Training argument
-    parser.add_argument('-o','--output', default='output/baseline', help = 'Output model directory path, also save evaluation plots')
+    parser.add_argument('-o','--output', default='/eos/user/s/stella/TrainTagger/output/baseline', help = 'Output model directory path, also save evaluation plots')
     parser.add_argument('-p','--percent', default=100, type=int, help = 'Percentage of how much processed data to train on')
     parser.add_argument('-m','--model', default='baseline', help = 'Model object name to train on')
     parser.add_argument('-n','--name', default='baseline', help = 'Model experiment name')

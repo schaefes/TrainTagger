@@ -23,6 +23,7 @@ from tagger.data.tools import extract_array, extract_nn_inputs, group_id_values
 from common import MINBIAS_RATE, WPs_CMSSW, find_rate, plot_ratio, get_bar_patch_data
 import rate_configurations
 
+# Helpers
 def nn_score_sum(model, jet_nn_inputs, n_jets, score_index):
 
     #Get the inputs for the first n_jets
@@ -49,9 +50,10 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, 
     #Get the coordinates
     target_rate_bb = [bb_list[i] for i in target_rate_idx] # NN cut dimension
     target_rate_tt = [tt_list[i] for i in target_rate_idx] # NN cut dimension
-    target_rate_HT = [ht_list[i] for i in target_rate_idx]
-    target_bb = target_rate_bb[target_rate_ht==WPs_CMSSW['btag_l1_ht']]
-    target_tt = target_rate_tt[target_rate_ht==WPs_CMSSW['btag_l1_ht']] # HT cut dimension
+    target_rate_HT = [ht_list[i] for i in target_rate_idx] # HT cut dimension
+    target_bb = target_rate_bb[target_rate_ht==WPs_CMSSW['btag_l1_ht']] # target rate and HT
+    target_tt = target_rate_tt[target_rate_ht==WPs_CMSSW['btag_l1_ht']] # target rate and HT
+    from IPython import embed; embed()
 
     # Get the signal predictions and class labels
     signal_preds, n_events = make_predictions(signal_path, model_dir)
@@ -118,37 +120,6 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, 
     plt.savefig(f"{plot_dir}/bbtt_rate.pdf", bbox_inches='tight')
     plt.savefig(f"{plot_dir}/bbtt_rate.png", bbox_inches='tight')
 
-
-def derive_rate(minbias_path, seed_name, n_entries=100000, tree='jetntuple/Jets'):
-
-    minbias = uproot.open(minbias_path)[tree]
-    from IPython import embed; embed()
-
-    raw_event_id = extract_array(minbias, 'event', n_entries)
-    raw_cmssw_bscore = extract_array(minbias, 'jet_bjetscore', n_entries)
-    raw_jet_pt = extract_array(minbias, 'jet_pt', n_entries)
-    raw_jet_eta = extract_array(minbias, 'jet_eta', n_entries)
-
-    array_fields = [raw_cmssw_bscore, raw_jet_pt, raw_jet_eta]
-
-    event_id, grouped_arrays  = group_id_values(raw_event_id, *array_fields, num_elements=4)
-    jet_btag, jet_pt, jet_eta = grouped_arrays
-    n_events = len(np.unique(raw_event_id))
-
-    # Apply the cuts
-    seeds_function = getattr(rate_configurations, seed_name)
-    _, n_passed = seeds_function(jet_pt, jet_eta, jet_btag, 2)
-
-    # convert to rate [kHz]
-    rate = {'rate': (n_passed / n_events) * MINBIAS_RATE}
-
-    rate_dir = os.path.join('tagger/output/physics/cc_rates')
-    os.makedirs(rate_dir, exist_ok=True)
-    with open(os.path.join(rate_dir, f"{seed_name}_rate.json"), "w") as f:
-        json.dump(rate, f, indent=4)
-
-    return
-
 def make_predictions(data_path, model_path, tree='outnano/Jets', njets=4):
     data = uproot.open(data_path)[tree]
 
@@ -177,6 +148,55 @@ def make_predictions(data_path, model_path, tree='outnano/Jets', njets=4):
 
     return nn_outputs, n_events
 
+def max_tau_sum(taup_preds, taum_preds):
+    """
+    Calculate the sum of the two highest tau scores
+    """
+    taup_sort = ak.sort(taup_preds, ascending=False, axis=1)[:,:2]
+    taum_sort = ak.sort(taum_preds, ascending=False, axis=1)[:,:2]
+    taup_argsort, taum_argsort = ak.argsort(taup_preds, ascending=False, axis=1)[:,:2], ak.argsort(taum_preds, ascending=False, axis=1)[:,:2]
+    alt_scores = taup_preds[taup_argsort] + taum_sort[taum_argsort][:,::-1]
+    tau_scores = ak.where(taup_argsort[:,0] == taum_argsort[:,0], ak.max(alt_scores, axis=1), taup_sort[:,0] + taum_sort[:,0])
+    tau_idxs = np.stack((taup_argmax, taum_argmax), axis=-1)
+    tau_alt1_idxs = np.stack((taup_argsort[:,0], taum_argsort[:,1]), axis=-1)
+    tau_alt2_idxs = np.stack((taup_argsort[:,1], taum_argsort[:,0]), axis=-1)
+    tau_alt_idxs = ak.where(ak.argmax(alt_scores, axis=1) == 0, tau_alt1_idxs, tau_alt2_idxs)
+    tau_idxs = ak.where(taup_argmax == taum_argmax, tau_alt_idxs, tau_idxs)
+
+    return tau_scores, tau_indices
+
+
+
+# Callables for studies
+def derive_rate(minbias_path, seed_name, n_entries=100000, tree='jetntuple/Jets'):
+
+    minbias = uproot.open(minbias_path)[tree]
+
+    raw_event_id = extract_array(minbias, 'event', n_entries)
+    raw_cmssw_bscore = extract_array(minbias, 'jet_bjetscore', n_entries)
+    raw_jet_pt = extract_array(minbias, 'jet_pt', n_entries)
+    raw_jet_eta = extract_array(minbias, 'jet_eta', n_entries)
+    raw_tau_pt = extract_array(minbias, 'jet_taupt', n_entries)
+
+    array_fields = [raw_cmssw_bscore, raw_jet_pt, raw_jet_eta, raw_tau_pt]
+
+    event_id, grouped_arrays  = group_id_values(raw_event_id, *array_fields, num_elements=4)
+    jet_btag, jet_pt, jet_eta, tau_pt = grouped_arrays
+    n_events = len(np.unique(raw_event_id))
+
+    # Apply the cuts
+    seeds_function = getattr(rate_configurations, seed_name)
+    _, n_passed = seeds_function(jet_pt, tau_pt)
+
+    # convert to rate [kHz]
+    rate = {'rate': (n_passed / n_events) * MINBIAS_RATE}
+
+    rate_dir = os.path.join('tagger/output/physics/cc_rates')
+    os.makedirs(rate_dir, exist_ok=True)
+    with open(os.path.join(rate_dir, f"{seed_name}_rate.json"), "w") as f:
+        json.dump(rate, f, indent=4)
+
+    return
 
 def derive_bbtt_WPs(model_dir, minbias_path, signal_path, target_rate=14, n_entries=100, tree='outnano/Jets'):
     """
@@ -208,25 +228,25 @@ def derive_bbtt_WPs(model_dir, minbias_path, signal_path, target_rate=14, n_entr
     jet_pt, jet_nn_inputs = grouped_arrays
 
     #Btag input list for first 4 jets
-    nn_outputs = [model.predict(np.asarray(jet_nn_inputs[:, i])) for i in range(0,4)]
+    nn_outputs = [model.predict(np.asarray(jet_nn_inputs[:, i]))[0] for i in range(0,4)]
 
     #Calculate the output sum
     b_index = class_labels['b']
     taup_index = class_labels['taup']
     taum_index = class_labels['taum']
-    b_preds = np.transpose([pred_score[0][:, b_index] for pred_score in nn_outputs])
+    taup_preds = np.transpose([pred_score[:, taup_index] for pred_score in nn_outputs])
+    taum_preds = np.transpose([pred_score[:, taum_index] for pred_score in nn_outputs])
+    b_preds = np.transpose([pred_score[:, b_index] for pred_score in nn_outputs])
+    # tscores_sum, tau_indices = max_tau_sum(taup_preds, taum_preds)
+    tscore_sum = np.max(taup_preds, axis=1) + np.max(taum_preds, axis=1)
     bscore_sum = np.sum(ak.sort(b_preds, axis=1, ascending=False)[:,:2], axis=1)
-    taup_preds = np.transpose([pred_score[0][:, taup_index] for pred_score in nn_outputs])
-    taum_preds = np.transpose([pred_score[0][:, taum_index] for pred_score in nn_outputs])
-    tscore_sum = ak.max(taup_preds, axis=1) + ak.max(taum_preds, axis=1)
     ht = ak.sum(jet_pt, axis=1)
 
     assert(len(bscore_sum) == len(ht))
 
     #Define the histograms (pT edge and NN Score edge)
-    ht_edges = list(np.arange(0,500,2)) + [10000] #Make sure to capture everything
-    bb_edges = list([round(i,2) for i in np.arange(0, 1.25, 0.01)]) + [2.0]
-    tt_edges = list([round(i,2) for i in np.arange(0, 1.25, 0.01)]) + [2.0]
+    ht_edges = list(np.arange(0,450,2)) + [10000] #Make sure to capture everything
+    NN_edges = list([round(i,2) for i in np.arange(0, 1.2, 0.02)]) + [2.0]
 
     RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
                     hist.axis.Variable(NN_edges, name="nn_bb", label="nn_bb"),
@@ -365,9 +385,9 @@ if __name__ == "__main__":
     """
 
     parser = ArgumentParser()
-    parser.add_argument('-m','--model_dir', default='output/baseline', help = 'Input model')
+    parser.add_argument('-m','--model_dir', default='/eos/user/s/stella/TrainTagger/output/baseline', help = 'Input model')
     parser.add_argument('-seed', '--seed_name', default='ht_btag', help='Decide which seed to compare to')
-    parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/ggHHbbtt_PU200.root' , help = 'Signal sample for HH->bbtt')
+    parser.add_argument('-s', '--signal', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/ggHHbbtt_PU200.root' , help = 'Signal sample for HH->bbtt')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
 
     #Different modes
@@ -384,6 +404,6 @@ if __name__ == "__main__":
     if args.deriveRate:
         derive_rate(args.minbias, args.seed_name, n_entries=args.n_entries)
     if args.deriveWPs:
-        derive_bbtt_WPs(args.model_dir, args.minbias, n_entries=args.n_entries,tree=args.tree)
+        derive_bbtt_WPs(args.model_dir, args.minbias, args.signal, n_entries=args.n_entries,tree=args.tree)
     elif args.eff:
-        bbtt_eff_HT(args.model_dir, args.sample, n_entries=args.n_entries,tree=args.tree)
+        bbtt_eff_HT(args.model_dir, args.signal, n_entries=args.n_entries,tree=args.tree)

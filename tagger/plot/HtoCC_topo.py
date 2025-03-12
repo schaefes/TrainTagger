@@ -46,7 +46,7 @@ def nn_score_sum(nn_outputs, class_labels, tag_sum, njets=2):
 
     return sum_score
 
-def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, rate):
+def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, fuse, rate):
     """
     Pick the working points and plot
     """
@@ -88,8 +88,12 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, rate):
     # Export the working point
     working_point = {"HT": WPs_CMSSW['btag_l1_ht'], "NN": float(working_point_NN)}
     rate = round(rate)
-    with open(os.path.join(plot_dir, f"working_point_{rate}_{tag_sum}.json"), "w") as f:
-        json.dump(working_point, f, indent=4)
+
+    # for unified category: wps are identical
+    if fuse:
+        for tag_sum in ['c', 'b', 'cb']:
+            with open(os.path.join(plot_dir, f"working_point_{rate}_{tag_sum}.json"), "w") as f:
+                json.dump(working_point, f, indent=4)
 
     ax.plot(target_rate_NN, target_rate_HT,
                 linewidth=5,
@@ -102,7 +106,7 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, rate):
 
 
 def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
-    nn_type, n_entries, tree='jetntuple/Jets'):
+    nn_type, n_entries, tree='outnano/Jets'):
     """
     Derive the HH->4b working points
     """
@@ -120,9 +124,11 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
     try:
         cc_topo_idx = topo_labels['VBFHToCC_PU200']
         bb_topo_idx = topo_labels['VBFHToBB_PU200']
+        fuse = False
     except:
         cc_topo_idx = topo_labels['VBFHToBBorCC_PU200']
         bb_topo_idx = topo_labels['VBFHToBBorCC_PU200']
+        fuse = True
 
     #Load the minbias data
     minbias = uproot.open(minbias_path)[tree]
@@ -192,11 +198,11 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
             nn_list.append(NN)
 
     #Pick target rate and plot it
-    pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, target_rate)
+    pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, fuse, target_rate)
 
     return
 
-def derive_rate(minbias_path, seed_name, n_entries=100000, tree='jetntuple/Jets'):
+def derive_rate(minbias_path, seed_name, n_entries=100000, tree='outnano/Jets'):
 
     minbias = uproot.open(minbias_path)[tree]
 
@@ -274,9 +280,11 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     try:
         cc_topo_idx = topo_labels['VBFHToCC_PU200']
         bb_topo_idx = topo_labels['VBFHToBB_PU200']
+        topo_model_type = 'decoupled'
     except:
         cc_topo_idx = topo_labels['VBFHToBBorCC_PU200']
         bb_topo_idx = topo_labels['VBFHToBBorCC_PU200']
+        topo_model_type = 'fuse'
 
     raw_inputs = extract_nn_inputs(signal, input_vars, n_entries=n_entries)
 
@@ -304,6 +312,7 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
 
     seeds_function = getattr(rate_configurations, seed_name)
     cmssw_selection, _ = seeds_function(jet_pt, jet_eta, cmssw_bscore, 2)
+    from IPython import embed; embed()
     tagger_selection = (jet_ht > tagger_ht_wp) & (tagger_score > tagger_wp)
     topo_selection = (jet_ht > topo_ht_wp) & (topo_score > topo_wp)
 
@@ -349,8 +358,8 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     plt.legend(loc='upper left')
 
     #Save plot
-    tagger_path = os.path.join(tagger_dir, f"plots/physics/{final_state}/Hcc_eff_{seed_name}_{tag_sum}")
-    topo_path = os.path.join(topo_dir, f"plots/physics/{final_state}/Hcc_eff_{seed_name}_{tag_sum}")
+    tagger_path = os.path.join(tagger_dir, f"plots/physics/{final_state}/Hcc_eff_{seed_name}_{tag_sum}_{topo_model_type}")
+    topo_path = os.path.join(topo_dir, f"plots/physics/{final_state}/Hcc_eff_{seed_name}_{tag_sum}_{topo_model_type}")
     for plot_path in [tagger_path, topo_path]:
         os.makedirs(os.path.dirname(plot_path), exist_ok=True)
         plt.savefig(f'{plot_path}.pdf', bbox_inches='tight')
@@ -366,11 +375,11 @@ if __name__ == "__main__":
     2. Run efficiency based on the derived working points: python HtoCC.py --eff
     """
     parser = ArgumentParser()
-    parser.add_argument('-tagger','--tagger_dir', default='output/baseline', help='Jet tagger model')
-    parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4_cb', help='Topo tagger model')
+    parser.add_argument('-tagger','--tagger_dir', default='/eos/user/s/stella/TrainTagger/output/baseline', help='Jet tagger model')
+    parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4', help='Topo tagger model')
     parser.add_argument('-seed', '--seed_name', default='ht_btag', help='Decide which seed to compare to')
     parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToBB_PU200.root', help='Signal sample for VBF->H->bb')
-    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/MinBias_PU200.root', help='Minbias sample for deriving rates')
+    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root', help='Minbias sample for deriving rates')
 
     #Different modes
     parser.add_argument('--deriveRate', action='store_true', help='Derive the fixed rate')
