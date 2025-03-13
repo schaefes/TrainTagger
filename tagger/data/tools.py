@@ -242,7 +242,6 @@ def extract_array(tree, field, entry_stop):
 def extract_events(tree, field, entry_stop):
     event_ids = tree['event'].array(entry_stop=entry_stop)
     unique_ids, indices, counts = np.unique(event_ids, return_index=True, return_counts=True)
-    from IPython import embed; embed()
 
 
 def extract_nn_inputs(data, input_vars, n_parts=16 ,n_entries=None):
@@ -254,8 +253,10 @@ def extract_nn_inputs(data, input_vars, n_parts=16 ,n_entries=None):
     inputs_list = []
 
     for field in input_vars:
-
-        field_array = extract_array(data, f"jet_pfcand_{field}", n_entries)
+        try:
+            field_array = extract_array(data, f"jet_pfcand_{field}", n_entries)
+        except:
+            field_array = data[f"jet_pfand_{field}"]
 
         padded_filled_array = _pad_fill(field_array, n_parts)
         inputs_list.append(padded_filled_array[:,:,np.newaxis])

@@ -37,7 +37,7 @@ def nn_score_sum(model, jet_nn_inputs, n_jets, score_index):
 
     return score_sum
 
-def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, target_rate):
+def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, n_entries, target_rate):
     """
     Pick the working points and plot
     """
@@ -50,14 +50,14 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, 
     #Get the coordinates
     target_rate_bb = [bb_list[i] for i in target_rate_idx] # NN cut dimension
     target_rate_tt = [tt_list[i] for i in target_rate_idx] # NN cut dimension
-    target_rate_HT = [ht_list[i] for i in target_rate_idx] # HT cut dimension
+    target_rate_ht = [ht_list[i] for i in target_rate_idx] # HT cut dimension
     target_bb = target_rate_bb[target_rate_ht==WPs_CMSSW['btag_l1_ht']] # target rate and HT
     target_tt = target_rate_tt[target_rate_ht==WPs_CMSSW['btag_l1_ht']] # target rate and HT
-    from IPython import embed; embed()
 
     # Get the signal predictions and class labels
-    signal_preds, n_events = make_predictions(signal_path, model_dir)
+    signal_preds, n_events = make_predictions(signal_path, model_dir, n_entries)
     with open(os.path.join(model_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
+    from IPython import embed; embed()
 
     #Calculate the output sum
     b_index = class_labels['b']
@@ -120,7 +120,7 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, 
     plt.savefig(f"{plot_dir}/bbtt_rate.pdf", bbox_inches='tight')
     plt.savefig(f"{plot_dir}/bbtt_rate.png", bbox_inches='tight')
 
-def make_predictions(data_path, model_path, tree='outnano/Jets', njets=4):
+def make_predictions(data_path, model_dir, n_entries, tree='jetntuple/Jets', njets=4):
     data = uproot.open(data_path)[tree]
 
     model = load_qmodel(os.path.join(model_dir, "model/saved_model.h5"))
@@ -245,8 +245,8 @@ def derive_bbtt_WPs(model_dir, minbias_path, signal_path, target_rate=14, n_entr
     assert(len(bscore_sum) == len(ht))
 
     #Define the histograms (pT edge and NN Score edge)
-    ht_edges = list(np.arange(0,450,2)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,2) for i in np.arange(0, 1.2, 0.02)]) + [2.0]
+    ht_edges = list(np.arange(0,448,4)) + [10000] #Make sure to capture everything
+    NN_edges = list([round(i,2) for i in np.arange(0, 1.2, 0.05)]) + [2.0]
 
     RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
                     hist.axis.Variable(NN_edges, name="nn_bb", label="nn_bb"),
@@ -274,7 +274,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, signal_path, target_rate=14, n_entr
                 tt_list.append(tt)
 
     #Pick target rate and plot it
-    pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, target_rate)
+    pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, n_entries, target_rate)
 
     return
 
