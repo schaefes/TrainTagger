@@ -48,16 +48,15 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, 
     target_rate_idx = find_rate(rate_list, target_rate = target_rate, RateRange=RateRange)
 
     #Get the coordinates
-    target_rate_bb = [bb_list[i] for i in target_rate_idx] # NN cut dimension
-    target_rate_tt = [tt_list[i] for i in target_rate_idx] # NN cut dimension
-    target_rate_ht = [ht_list[i] for i in target_rate_idx] # HT cut dimension
+    target_rate_bb = np.array([bb_list[i] for i in target_rate_idx]) # NN cut dimension
+    target_rate_tt = np.array([tt_list[i] for i in target_rate_idx]) # NN cut dimension
+    target_rate_ht = np.array([ht_list[i] for i in target_rate_idx]) # HT cut dimension
     target_bb = target_rate_bb[target_rate_ht==WPs_CMSSW['btag_l1_ht']] # target rate and HT
     target_tt = target_rate_tt[target_rate_ht==WPs_CMSSW['btag_l1_ht']] # target rate and HT
 
     # Get the signal predictions and class labels
-    signal_preds, n_events = make_predictions(signal_path, model_dir, n_entries)
+    signal_preds, n_events, signal_pt = make_predictions(signal_path, model_dir, n_entries)
     with open(os.path.join(model_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
-    from IPython import embed; embed()
 
     #Calculate the output sum
     b_index = class_labels['b']
@@ -68,21 +67,27 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, 
     taup_preds = np.transpose([pred_score[0][:, taup_index] for pred_score in signal_preds])
     taum_preds = np.transpose([pred_score[0][:, taum_index] for pred_score in signal_preds])
     tscore_sum = ak.max(taup_preds, axis=1) + ak.max(taum_preds, axis=1)
-    event_ht = ak.sum(jet_pt, axis=1)
+    event_ht = ak.sum(signal_pt, axis=1)
 
     # Calculate the efficiency
-    target_rate_eff = []
-    for ht, bb, tt in zip(target_rate_ht, target_rate_bb, target_rate_tt):
+    target_rate_eff = np.zeros(len(target_rate_ht))
+    from IPython import embed; embed()
+    for i, ht, bb, tt in enumerate(zip(target_rate_ht, target_rate_bb, target_rate_tt)):
         ht_mask = event_ht > ht
         bb_mask = bscore_sum > bb
         tt_mask = tscore_sum > tt
         mask = ht_mask & bb_mask & tt_mask
         eff = np.sum(mask) / n_events
-        target_rate_eff.append(eff)
-    # get max efficiency at target HT
+        target_rate_eff[i] = eff
+
+    # Efficiency at target rate and HT WP
     target_eff = target_rate_eff[target_rate_ht==WPs_CMSSW['btag_l1_ht']]
+
+    # get global max efficiency at target rate
     wp_max_eff_idx = np.argmax(target_rate_eff)
-    wp_ht_eff_idx = np.argmax(target_rate_eff[target_rate_ht==WPs_CMSSW['btag_l1_ht']])
+
+    # get max efficiency at target rate and HT WP
+    wp_ht_eff_idx = np.argmax(target_eff)
 
 
     # Export the working point
@@ -146,7 +151,7 @@ def make_predictions(data_path, model_dir, n_entries, tree='jetntuple/Jets', nje
     #Btag input list for first 4 jets
     nn_outputs = [model.predict(np.asarray(jet_nn_inputs[:, i])) for i in range(0,njets)]
 
-    return nn_outputs, n_events
+    return nn_outputs, n_events, jet_pt
 
 def max_tau_sum(taup_preds, taum_preds):
     """
@@ -164,8 +169,6 @@ def max_tau_sum(taup_preds, taum_preds):
     tau_idxs = ak.where(taup_argmax == taum_argmax, tau_alt_idxs, tau_idxs)
 
     return tau_scores, tau_indices
-
-
 
 # Callables for studies
 def derive_rate(minbias_path, seed_name, n_entries=100000, tree='jetntuple/Jets'):
