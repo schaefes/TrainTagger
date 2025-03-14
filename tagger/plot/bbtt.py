@@ -62,17 +62,17 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, 
     b_index = class_labels['b']
     taup_index = class_labels['taup']
     taum_index = class_labels['taum']
-    b_preds = np.transpose([pred_score[0][:, b_index] for pred_score in signal_preds])
-    bscore_sum = np.sum(ak.sort(b_preds, axis=1, ascending=False)[:,:2], axis=1)
     taup_preds = np.transpose([pred_score[0][:, taup_index] for pred_score in signal_preds])
     taum_preds = np.transpose([pred_score[0][:, taum_index] for pred_score in signal_preds])
+    # tscore_sum, tau_indices = max_tau_sum(taup_preds, taum_preds)
+    b_preds = np.transpose([pred_score[0][:, b_index] for pred_score in signal_preds])
+    bscore_sum = np.sum(ak.sort(b_preds, axis=1, ascending=False)[:,:2], axis=1)
     tscore_sum = ak.max(taup_preds, axis=1) + ak.max(taum_preds, axis=1)
     event_ht = ak.sum(signal_pt, axis=1)
 
     # Calculate the efficiency
     target_rate_eff = np.zeros(len(target_rate_ht))
-    from IPython import embed; embed()
-    for i, ht, bb, tt in enumerate(zip(target_rate_ht, target_rate_bb, target_rate_tt)):
+    for i, (ht, bb, tt) in enumerate(zip(target_rate_ht, target_rate_bb, target_rate_tt)):
         ht_mask = event_ht > ht
         bb_mask = bscore_sum > bb
         tt_mask = tscore_sum > tt
