@@ -223,7 +223,7 @@ def derive_rate(minbias_path, model_dir, n_entries=100000, tree='jetntuple/Jets'
 
     return
 
-def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate = 14, RateRange=0.5):
+def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate, RateRange=0.5):
     """
     Derive the HT only working points (without bb cuts)
     """
@@ -238,7 +238,7 @@ def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate = 14, Rate
     for ht in ht_edges[:-1]:
 
         #Calculate the rate
-        rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(0.0j, None, sum)}]/n_events
+        rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn_bb": slice(0.0j, None, sum)}][{"nn_tt": slice(0.0j, None, sum)}]/n_events
         rate_list.append(rate*MINBIAS_RATE)
 
         #Append the results
@@ -248,8 +248,7 @@ def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate = 14, Rate
 
     #Read WPs dict and add HT cut
     WP_json = os.path.join(plot_dir, "ht_working_point.json")
-    working_point = json.load(open(WP_json, "r"))
-    working_point["ht_only_cut"] = float(ht_list[target_rate_idx[0]])
+    working_point = {"ht_only_cut": float(ht_list[target_rate_idx[0]])}
     json.dump(working_point, open(WP_json, "w"), indent=4)
 
 def derive_bbtt_WPs(model_dir, minbias_path, signal_path, n_entries=100, tree='outnano/Jets'):
@@ -291,8 +290,8 @@ def derive_bbtt_WPs(model_dir, minbias_path, signal_path, n_entries=100, tree='o
     assert(len(bscore_sum) == len(ht))
 
     #Define the histograms (pT edge and NN Score edge)
-    ht_edges = list(np.arange(150,450,5)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,2) for i in np.arange(0, 1.2, 0.05)]) + [2.0]
+    ht_edges = list(np.arange(150,500,2)) + [10000] #Make sure to capture everything
+    NN_edges = list([round(i,2) for i in np.arange(0, 1.2, 0.025)]) + [2.0]
 
     RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
                     hist.axis.Variable(NN_edges, name="nn_bb", label="nn_bb"),
