@@ -12,14 +12,6 @@ jet_collection = {'jet_energy': 'energy',
                     'jet_phi_phys': 'phi',
                 }
 
-tag_collection = {'jet_multijetscore_b': 'b',
-                    'jet_multijetscore_charm': 'charm',
-                    'jet_multijetscore_gluon': 'gluon',
-                    'jet_multijetscore_light': 'light',
-                    'jet_multijetscore_taup': 'taup',
-                    'jet_multijetscore_taum': 'taum'
-                }
-
 def get_jet_mass(eta, pt, energy):
     p = np.sqrt(pt**2 * (1 + np.sinh(eta)**2))
     m = np.sqrt(energy**2 - p**2)
@@ -72,9 +64,10 @@ def topo_input(inp_data, tagger_preds, tag_idxs, n_features, n_entries):
     event_features = np.load("/eos/user/s/stella/nn_data/MinBias_PU200/event_feature_names.npy")
 
     # add the tagger predictions
-    tags_list = jet_features[4:]
+    from IPython import embed; embed()
+    tags_list = jet_features[-8:]
     for k in tags_list:
-        idx = tag_idxs[tag_collection[k]]
+        idx = tag_idxs[k]
         fields_dict[k] = tagger_preds[:,:, idx]
 
     n_jets = 15 # number of jets to keep
