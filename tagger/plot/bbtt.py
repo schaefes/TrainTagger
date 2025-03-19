@@ -1,4 +1,4 @@
-import os, json, gc
+import os, json
 from argparse import ArgumentParser
 
 from qkeras.utils import load_qmodel
@@ -223,6 +223,35 @@ def derive_rate(minbias_path, model_dir, n_entries=100000, tree='jetntuple/Jets'
 
     return
 
+def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate = 14, RateRange=0.5):
+    """
+    Derive the HT only working points (without bb cuts)
+    """
+
+    plot_dir = os.path.join(model_dir, 'plots/physics/bbtt')
+
+    #Derive the rate
+    rate_list = []
+    ht_list = []
+
+    #Loop through the edges and integrate
+    for ht in ht_edges[:-1]:
+
+        #Calculate the rate
+        rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(0.0j, None, sum)}]/n_events
+        rate_list.append(rate*MINBIAS_RATE)
+
+        #Append the results
+        ht_list.append(ht)
+
+    target_rate_idx = find_rate(rate_list, target_rate = target_rate, RateRange=RateRange)
+
+    #Read WPs dict and add HT cut
+    WP_json = os.path.join(plot_dir, "ht_working_point.json")
+    working_point = json.load(open(WP_json, "r"))
+    working_point["ht_only_cut"] = float(ht_list[target_rate_idx[0]])
+    json.dump(working_point, open(WP_json, "w"), indent=4)
+
 def derive_bbtt_WPs(model_dir, minbias_path, signal_path, n_entries=100, tree='outnano/Jets'):
     """
     Derive the HH->4b working points
@@ -292,6 +321,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, signal_path, n_entries=100, tree='o
 
     #Pick target rate and plot it
     pick_and_plot(rate_list, ht_list, bb_list, tt_list, model_dir, signal_path, n_entries, rate)
+    derive_HT_WP(RateHist, ht_edges, n_events, model_dir, rate)
 
     return
 
@@ -307,12 +337,9 @@ def bbtt_eff_HT(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
     ht_egdes = list(np.arange(0,800,20))
     ht_axis = hist.axis.Variable(ht_egdes, name = r"$HT^{gen}$")
 
-    #Working points for CMSSW
-    cmssw_btag = WPs_CMSSW['btag']
-    cmssw_btag_ht =  WPs_CMSSW['btag_l1_ht']
-
     #Check if the working point have been derived
     WP_path = os.path.join(model_dir, "plots/physics/bbtt/bbtt_fixed_ht_wp.json")
+    HT_path = os.path.join(model_dir, "plots/physics/bbtt/ht_working_point.json")
 
     #Get derived working points
     if os.path.exists(WP_path):
@@ -320,6 +347,9 @@ def bbtt_eff_HT(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
         btag_wp = WPs['BB']
         ttag_wp = WPs['TT']
         ht_wp = WPs['HT']
+    if os.path.exists(HT_path):
+        with open(HT_path, "r") as f:  WPs = json.load(f)
+        ht_only_wp = WPs['ht_only_cut']
     else:
         raise Exception("Working point does not exist. Run with --deriveWPs first.")
 
@@ -346,35 +376,40 @@ def bbtt_eff_HT(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
     jet_genht = ak.sum(jet_genpt, axis=1)
     jet_ht = ak.sum(jet_pt, axis=1)
 
-    # Result from the baseline selection
-    model_bscore_sum, model_tscore_sum = nn_score_sums(model, jet_nn_inputs, class_labels)
-
+    # Result from the baseline selection, multiclass tagger and ht only working point
     baseline_selection, _ = bbtt_seed(jet_pt, tau_pt)
+    model_bscore_sum, model_tscore_sum = nn_score_sums(model, jet_nn_inputs, class_labels)
     model_selection = (jet_ht > ht_wp) & (model_bscore_sum > btag_wp) & (model_tscore_sum > ttag_wp)
+    ht_only_selection = jet_ht > ht_only_wp
 
     #PLot the efficiencies
     #Basically we want to bin the selected truth ht and divide it by the overall count
     all_events = Hist(ht_axis)
     baseline_selected_events = Hist(ht_axis)
     model_selected_events = Hist(ht_axis)
+    ht_only_selected_events = Hist(ht_axis)
 
     all_events.fill(jet_genht)
     baseline_selected_events.fill(jet_genht[baseline_selection])
     model_selected_events.fill(jet_genht[model_selection])
+    ht_only_selected_events.fill(jet_genht[ht_only_selection])
 
     #Plot the ratio
     eff_baseline = plot_ratio(all_events, baseline_selected_events)
     eff_model = plot_ratio(all_events, model_selected_events)
 
     #Get data from handles
-    cmssw_x, cmssw_y, cmssw_err = get_bar_patch_data(eff_baseline)
+    baseline_x, baseline_y, baseline_err = get_bar_patch_data(eff_baseline)
     model_x, model_y, model_err = get_bar_patch_data(eff_model)
+    eff_ht_only = plot_ratio(all_events, ht_only_selected_events)
+    ht_only_x, ht_only_y, ht_only_err = get_bar_patch_data(eff_ht_only)
 
     #Now plot all
     fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
-    ax.errorbar(cmssw_x, cmssw_y, yerr=cmssw_err, c=style.color_cycle[0], fmt='o', linewidth=3, label=r'bb$\tau \tau$ seed@ {} kHz (L1 $HT$ > {} GeV, $\tau 1,2 p_T$ > {} GeV)'.format(rate, cmssw_btag_ht, 34))
+    ax.errorbar(baseline_x, baseline_y, yerr=baseline_err, c=style.color_cycle[0], fmt='o', linewidth=3, label=r'bb$\tau \tau$ seed@ {} kHz (L1 $HT$ > {} GeV, $\tau 1,2 p_T$ > {} GeV)'.format(rate, 220, 34))
     ax.errorbar(model_x, model_y, yerr=model_err, c=style.color_cycle[1], fmt='o', linewidth=3, label=r'Multiclass @ {} kHz (L1 $HT$ > {} GeV, $\sum$ 2$\tau$ > {}, $\sum$ 2b > {})'.format(rate, ht_wp, round(ttag_wp,2), round(btag_wp,2)))
+    ax.errorbar(ht_only_x, ht_only_y, yerr=ht_only_err, c=style.color_cycle[2], fmt='o', linewidth=3, label=r'HT-only @ {} kHz (L1 $HT$ > {} GeV)'.format(rate, ht_only_wp))
 
     #Plot other labels
     ax.hlines(1, 0, 800, linestyles='dashed', color='black', linewidth=4)
@@ -382,7 +417,7 @@ def bbtt_eff_HT(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
     ax.set_ylim([0., 1.1])
     ax.set_xlim([0, 800])
     ax.set_xlabel(r"$HT^{gen}$ [GeV]")
-    ax.set_ylabel(r"$\epsilon$(HH $\to$ 4b trigger rate at {} kHz)".format(rate))
+    ax.set_ylabel(r"$\epsilon$(HH $\to$ bb$\tau \tau$ trigger rate at {} kHz)".format(rate))
     plt.legend(loc='upper left')
 
     #Save plot
@@ -396,8 +431,8 @@ if __name__ == "__main__":
     """
     2 steps:
 
-    1. Derive working points: python bbbb.py --deriveWPs
-    2. Run efficiency based on the derived working points: python bbbb.py --eff
+    1. Derive working points: python bbtt.py --deriveWPs
+    2. Run efficiency based on the derived working points: python bbtt.py --eff
     """
 
     parser = ArgumentParser()
