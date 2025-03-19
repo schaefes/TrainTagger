@@ -30,7 +30,7 @@ variables:
   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
   before_script:
     - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
-    - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null 
+    - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
   script:
     - python $FOLDER/$SCRIPT $ARGS
   tags:
@@ -68,14 +68,14 @@ train:
   extends:
     - .template
   stage: train
-  needs: 
+  needs:
     - job : data
       optional: true
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
   - source activate tagger
-  - python tagger/train/train.py -n $Name -p 50 
+  - python tagger/train/train.py -n $Name -p 50
   - python tagger/train/train.py --plot-basic -n $Name
   - cd output/baseline
   artifacts:
@@ -103,11 +103,16 @@ evaluate:
   - cd data
   - eos cp $EOS_DATA_DIR/$MINBIAS .
   - eos cp $BBBB_EOS_DIR/$BBBB .
+  - eos cp $BBTT_EOS_DIR/$BBTT .
   - eos cp $EOS_DATA_DIR/$VBFHTAUTAU .
   - cd ..
   - echo "bbbb performance"
   - python tagger/plot/bbbb.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
   - python tagger/plot/bbbb.py --eff -s data/$BBBB -n 500000 --tree $NTUPLE_TREE
+  - echo "bbtt performance"
+  - python tagger/plot/bbtt.py --deriveRate --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
+  - python tagger/plot/bbtt.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
+  - python tagger/plot/bbtt.py --eff -s data/$BBTT -n 500000 --tree $NTUPLE_TREE
   - echo "VBF tautau performance"
   - python tagger/plot/diTaus.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
   - python tagger/plot/diTaus.py --BkgRate --minbias data/$MINBIAS -n 500000 --tree $NTUPLE_TREE
@@ -132,7 +137,7 @@ hls4ml:
   extends:
     - .template
   stage: hls4ml
-  needs: 
+  needs:
     - job : train
   script:
   - source activate tagger
@@ -151,7 +156,7 @@ synth:
   script:
     - cd tagger/firmware/JetTaggerNN
     - vitis_hls -f build_prj.tcl
-    - vivado -mode batch -source vivado_synth.tcl 
+    - vivado -mode batch -source vivado_synth.tcl
     - cd ../../..
   artifacts:
     paths:
@@ -237,16 +242,16 @@ upload:
     - cd ..
     - rm -rf php-plots
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.cern.ch/cms-analysis/general/php-plots.git -b feature/update_extension_grouping
-    - export PATH="${PATH}:/builds/ml_l1/php-plots/bin" 
+    - export PATH="${PATH}:/builds/ml_l1/php-plots/bin"
     - pb_copy_index.py TrainTagger/${Name} --recursive
     - pb_copy_index.py ${EOS_STORAGE_DIR} --recursive
-    - cd TrainTagger/${Name} 
+    - cd TrainTagger/${Name}
     - pb_deploy_plots.py model ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR} --recursive --extensions h5
     - pb_deploy_plots.py plots ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR} --recursive --extensions png,pdf
     - cd ..
     - mv CI/mlflow_logger.py .
     - python mlflow_logger.py -w https://cms-l1t-jet-tagger.web.cern.ch/${CI_PROJECT_NAME}/${EOS_STORAGE_SUBDIR}
-      -f ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware 
+      -f ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware
       -m ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model
       -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/plots
       -n ${Name}
