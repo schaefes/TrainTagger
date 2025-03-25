@@ -375,7 +375,7 @@ if __name__ == "__main__":
     2. Run efficiency based on the derived working points: python HtoCC.py --eff
     """
     parser = ArgumentParser()
-    parser.add_argument('-tagger','--tagger_dir', default='/eos/user/s/stella/TrainTagger/output/baseline', help='Jet tagger model')
+    parser.add_argument('-tagger','--tagger_dir', default='/eos/project/c/cms-l1t-jet-tagger/CI/branches/main/new_samples_baseline_5param_extended_trk/pipeline10992551/model', help='Jet tagger model')
     parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4', help='Topo tagger model')
     parser.add_argument('-seed', '--seed_name', default='ht_btag', help='Decide which seed to compare to')
     parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToBB_PU200.root', help='Signal sample for VBF->H->bb')
