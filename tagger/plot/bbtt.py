@@ -289,7 +289,6 @@ def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate, RateRange
 
     #Read WPs dict and add HT cut
     WP_json = os.path.join(plot_dir, "ht_working_point.json")
-    from IPython import embed; embed()
     working_point = {"ht_only_cut": float(ht_list[target_rate_idx[0]])}
     json.dump(working_point, open(WP_json, "w"), indent=4)
 
