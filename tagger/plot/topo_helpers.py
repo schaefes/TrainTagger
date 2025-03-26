@@ -64,7 +64,6 @@ def topo_input(inp_data, tagger_preds, tag_idxs, n_features, n_entries):
     event_features = np.load("/eos/user/s/stella/nn_data/MinBias_PU200/event_feature_names.npy")
 
     # add the tagger predictions
-    from IPython import embed; embed()
     tags_list = jet_features[-8:]
     for k in tags_list:
         idx = tag_idxs[k]

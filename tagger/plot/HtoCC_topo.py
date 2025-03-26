@@ -117,8 +117,8 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
     topo_model = load_qmodel(os.path.join(topo_dir, "model.h5"))
 
     #Load input/ouput variables of the NN
-    with open(os.path.join(tagger_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
-    with open(os.path.join(tagger_dir, "class_label.json"), "r") as f: tagger_labels = json.load(f)
+    with open(os.path.join("/afs/cern.ch/user/s/stella/TaggerFork/TrainTagger/output/baseline", "input_vars.json"), "r") as f: input_vars = json.load(f)
+    with open(os.path.join("/afs/cern.ch/user/s/stella/TaggerFork/TrainTagger/output/baseline", "class_label.json"), "r") as f: tagger_labels = json.load(f)
     with open(os.path.join(topo_dir, "class_label.json"), "r") as f: topo_labels = json.load(f)
 
     try:
@@ -274,8 +274,8 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
     raw_cmssw_bscore = extract_array(signal, 'jet_bjetscore', n_entries)
 
     # Load the inputs
-    with open(os.path.join(tagger_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
-    with open(os.path.join(tagger_dir, "class_label.json"), "r") as f: tagger_labels = json.load(f)
+    with open(os.path.join("/afs/cern.ch/user/s/stella/TaggerFork/TrainTagger/output/baseline", "input_vars.json"), "r") as f: input_vars = json.load(f)
+    with open(os.path.join("/afs/cern.ch/user/s/stella/TaggerFork/TrainTagger/output/baseline", "class_label.json"), "r") as f: tagger_labels = json.load(f)
     with open(os.path.join(topo_dir, "class_label.json"), "r") as f: topo_labels = json.load(f)
     try:
         cc_topo_idx = topo_labels['VBFHToCC_PU200']
@@ -375,7 +375,7 @@ if __name__ == "__main__":
     2. Run efficiency based on the derived working points: python HtoCC.py --eff
     """
     parser = ArgumentParser()
-    parser.add_argument('-tagger','--tagger_dir', default='/eos/project/c/cms-l1t-jet-tagger/CI/branches/main/new_samples_baseline_5param_extended_trk/pipeline10992551/model', help='Jet tagger model')
+    parser.add_argument('-tagger','--tagger_dir', default='/eos/project/c/cms-l1t-jet-tagger/CI/branches/main/new_samples_baseline_5param_extended_trk/pipeline10992551', help='Jet tagger model')
     parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4', help='Topo tagger model')
     parser.add_argument('-seed', '--seed_name', default='ht_btag', help='Decide which seed to compare to')
     parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToBB_PU200.root', help='Signal sample for VBF->H->bb')
