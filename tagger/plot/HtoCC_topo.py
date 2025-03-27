@@ -76,6 +76,7 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, fuse, rate):
     RateRange = 0.5
 
     #Find the target rate points, plot them and print out some info as well
+    from IPython import embed; embed()
     target_rate_idx = find_rate(rate_list, target_rate = rate, RateRange=RateRange)
 
     #Get the coordinates
