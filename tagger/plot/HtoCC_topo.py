@@ -50,6 +50,9 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, fuse, rate):
     """
     Pick the working points and plot
     """
+    rate_list, ht_list, nn_list = np.array(rate_list), np.array(ht_list), np.array(nn_list)
+    rate_list, ht_list, nn_list = rate_list[rate_list>0], ht_list[rate_list>0], nn_list[rate_list>0]
+    rate_list, ht_list, nn_list = list(rate_list), list(ht_list), list(nn_list)
     plot_dir = os.path.join(model_dir, 'plots/physics/wps')
     os.makedirs(plot_dir, exist_ok=True)
 
@@ -94,6 +97,9 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, fuse, rate):
         for tag_sum in ['c', 'b', 'cb']:
             with open(os.path.join(plot_dir, f"working_point_{rate}_{tag_sum}.json"), "w") as f:
                 json.dump(working_point, f, indent=4)
+    else:
+        with open(os.path.join(plot_dir, f"working_point_{rate}_{tag_sum}.json"), "w") as f:
+            json.dump(working_point, f, indent=4)
 
     ax.plot(target_rate_NN, target_rate_HT,
                 linewidth=5,
@@ -104,6 +110,36 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, fuse, rate):
     plt.savefig(f"{plot_dir}/cc_{rate}_{tag_sum}.pdf", bbox_inches='tight')
     plt.savefig(f"{plot_dir}/cc_rate_{rate}_{tag_sum}.png", bbox_inches='tight')
 
+def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate = 14, RateRange=0.5):
+    """
+    Derive the HT only working points (without bb cuts)
+    """
+
+    plot_dir = os.path.join(model_dir, 'plots/physics/wps')
+
+    #Derive the rate
+    rate_list = []
+    ht_list = []
+
+    #Loop through the edges and integrate
+    for ht in ht_edges[:-1]:
+
+        #Calculate the rate
+        rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(0.0j, None, sum)}]/n_events
+        rate_list.append(rate*MINBIAS_RATE)
+
+        #Append the results
+        ht_list.append(ht)
+
+    target_rate_idx = find_rate(rate_list, target_rate = target_rate, RateRange=RateRange)
+
+    #Read WPs dict and add HT cut
+    working_point = {"ht_only_cut": float(ht_list[target_rate_idx[0]])}
+    WP_json = os.path.join(plot_dir, "working_point.json")
+    with open(WP_json, "w") as f:
+        json.dump(working_point, f, indent=4)
+
+    return
 
 def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
     nn_type, n_entries, tree='outnano/Jets'):
@@ -172,9 +208,8 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
     assert(len(nn_score) == len(ht))
 
     #Define the histograms (pT edge and NN Score edge)
-    ht_edges = list(np.arange(0,250,1)) + [5000] #Make sure to capture everything
-    NN_edges = list([round(i,3) for i in np.arange(0, 0.75 * max_score, 0.002 * max_score)])
-    NN_edges.append(max_score)
+    ht_edges = list(np.arange(0,500,1)) + [5000] #Make sure to capture everything
+    NN_edges = list(np.arange(0, 0.9 * max_score, 0.002 * max_score)) + [max_score]
 
     RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
                     hist.axis.Variable(NN_edges, name="nn", label="nn"))
@@ -185,20 +220,21 @@ def derive_cc_WPs(tagger_dir, topo_dir, minbias_path, seed_name, tag_sum,
     rate_list = []
     ht_list = []
     nn_list = []
+
     #Loop through the edges and integrate
-    for ht in ht_edges[:-1]:
-        for NN in NN_edges[:-1]:
+    for NN in NN_edges[:-1]:
 
-            #Calculate the rate
-            counts = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(NN*1.00j, None, sum)}]
-            rate_list.append((counts / n_events) * MINBIAS_RATE)
+        #Calculate the rate
+        counts = RateHist[{"ht": slice(220*1j, None, sum)}][{"nn": slice(NN*1.00j, None, sum)}]
+        rate_list.append((counts / n_events) * MINBIAS_RATE)
 
-            #Append the results
-            ht_list.append(ht)
-            nn_list.append(NN)
+        #Append the results
+        ht_list.append(220)
+        nn_list.append(NN)
 
     #Pick target rate and plot it
     pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, fuse, target_rate)
+    derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate, RateRange=0.75)
 
     return
 
@@ -312,7 +348,6 @@ def cc_eff_HT(tagger_dir, topo_dir, signal_path, seed_name, tag_sum, n_entries=1
 
     seeds_function = getattr(rate_configurations, seed_name)
     cmssw_selection, _ = seeds_function(jet_pt, jet_eta, cmssw_bscore, 2)
-    from IPython import embed; embed()
     tagger_selection = (jet_ht > tagger_ht_wp) & (tagger_score > tagger_wp)
     topo_selection = (jet_ht > topo_ht_wp) & (topo_score > topo_wp)
 
@@ -375,8 +410,8 @@ if __name__ == "__main__":
     2. Run efficiency based on the derived working points: python HtoCC.py --eff
     """
     parser = ArgumentParser()
-    parser.add_argument('-tagger','--tagger_dir', default='/eos/project/c/cms-l1t-jet-tagger/CI/branches/main/new_samples_baseline_5param_extended_trk/pipeline10992551', help='Jet tagger model')
-    parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4', help='Topo tagger model')
+    parser.add_argument('-tagger','--tagger_dir', default='/eos/user/s/stella/TrainTagger/output/baseline', help='Jet tagger model')
+    parser.add_argument('-topo','--topo_dir', default='/eos/user/s/stella/nn_models/MinBias_PU200_VBFHToBB_PU200_VBFHToCC_PU200_VBFHToInvisible_PU200_VBFHToTauTau_PU200/fold1of3/model_ds_bg4_cb', help='Topo tagger model')
     parser.add_argument('-seed', '--seed_name', default='ht_btag', help='Decide which seed to compare to')
     parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/VBFHToBB_PU200.root', help='Signal sample for VBF->H->bb')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root', help='Minbias sample for deriving rates')
