@@ -263,7 +263,7 @@ def derive_rate(minbias_path, model_dir, n_entries=100000, tree='jetntuple/Jets'
 
     return
 
-def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate, RateRange=0.75):
+def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate, RateRange=0.85):
     """
     Derive the HT only working points (without bb cuts)
     """
@@ -338,7 +338,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,2) for i in np.arange(0, 1.2, 0.02)]) + [2.0]
+    NN_edges = list([round(i,2) for i in np.arange(0, 1.5, 0.01)]) + [2.0]
 
     # for raw and vs light preds
     raw = True
