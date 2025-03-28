@@ -73,7 +73,7 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, tag_sum, fuse, rate):
     ax.set_ylim([10,500])
 
     #plus, minus range
-    RateRange = 0.5
+    RateRange = 0.75
 
     #Find the target rate points, plot them and print out some info as well
     from IPython import embed; embed()
@@ -133,7 +133,7 @@ def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate = 14, Rate
         ht_list.append(ht)
 
     target_rate_idx = find_rate(rate_list, target_rate = target_rate, RateRange=RateRange)
-
+    from IPython import embed; embed()
     #Read WPs dict and add HT cut
     working_point = {"ht_only_cut": float(ht_list[target_rate_idx[0]])}
     WP_json = os.path.join(plot_dir, "working_point.json")
