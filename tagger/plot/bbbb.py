@@ -19,16 +19,20 @@ style.set_style()
 from scipy.interpolate import interp1d
 
 #Imports from other modules
-from tagger.data.tools import extract_array, extract_nn_inputs, group_id_values
+from tagger.data.tools import extract_array, extract_nn_inputs, group_id_values, get_input_mask
 from common import MINBIAS_RATE, WPs_CMSSW, find_rate, plot_ratio, get_bar_patch_data
 
 def nn_bscore_sum(model, jet_nn_inputs, n_jets=4, b_index = 1):
 
-    #Get the inputs for the first n_jets
+    N_FILTERS = model.get_layer('avgpool').output_shape[1]
+
+    #Get the inputs and masks for the first n_jets
     btag_inputs = [np.asarray(jet_nn_inputs[:, i]) for i in range(0, n_jets)]
+    input_masks = [get_input_mask(btag_inp, N_FILTERS) for btag_inp in btag_inputs]
+    nn_inputs = [[inp, mask] for inp, mask in zip(btag_inputs, input_masks)]
 
     #Get the nn outputs
-    nn_outputs = [model.predict(nn_input) for nn_input in btag_inputs]
+    nn_outputs = [model.predict(nn_inp) for nn_inp in nn_inputs]
 
     #Sum them together
     bscore_sum = sum([pred_score[0][:, b_index] for pred_score in nn_outputs])
@@ -42,7 +46,7 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
 
     plot_dir = os.path.join(model_dir, 'plots/physics/bbbb')
     os.makedirs(plot_dir, exist_ok=True)
-    
+
     fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
     im = ax.scatter(nn_list, ht_list, c=rate_list, s=500, marker='s',
@@ -55,8 +59,13 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
 
     ax.set_ylabel(r"HT [GeV]")
     ax.set_xlabel(r"$\sum_{4~leading~jets}$ b scores")
-    
+<<<<<<< HEAD
+
     ax.set_xlim([0, 1.3])
+=======
+
+    ax.set_xlim([0,2.5])
+>>>>>>> masking_model
     ax.set_ylim([10,500])
 
     #plus, minus range
@@ -79,16 +88,17 @@ def pick_and_plot(rate_list, ht_list, nn_list, model_dir, target_rate = 14):
     working_point = {"HT": WPs_CMSSW['btag_l1_ht'], "NN": float(working_point_NN)}
     with open(os.path.join(plot_dir, "working_point.json"), "w") as f:
         json.dump(working_point, f, indent=4)
-        
+
     ax.plot(target_rate_NN, target_rate_HT,
                 linewidth=5,
                 color ='firebrick',
                 label = r"${} \pm {}$ kHz".format(target_rate, RateRange))
-    
+
     ax.legend(loc='upper right')
     plt.savefig(f"{plot_dir}/bbbb_rate.pdf", bbox_inches='tight')
     plt.savefig(f"{plot_dir}/bbbb_rate.png", bbox_inches='tight')
 
+<<<<<<< HEAD
 def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate = 14, RateRange=0.8):
     """
     Derive the HT only working points (without bb cuts)
@@ -102,14 +112,14 @@ def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate = 14, Rate
 
     #Loop through the edges and integrate
     for ht in ht_edges[:-1]:
-            
+
         #Calculate the rate
         rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(0.0j, None, sum)}]/n_events
         rate_list.append(rate*MINBIAS_RATE)
 
-        #Append the results   
+        #Append the results
         ht_list.append(ht)
-    
+
     target_rate_idx = find_rate(rate_list, target_rate = target_rate, RateRange=RateRange)
 
     #Read WPs dict and add HT cut
@@ -120,11 +130,15 @@ def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate = 14, Rate
 
 
 def derive_bbbb_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree='outnano/Jets'):
+=======
+def derive_bbbb_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree='jetntuple/Jets'):
+>>>>>>> masking_model
     """
     Derive the HH->4b working points
     """
 
     model=load_qmodel(os.path.join(model_dir, "model/saved_model.h5"))
+    N_FILTERS = model.get_layer('avgpool').output_shape[1]
 
     #Load input/ouput variables of the NN
     with open(os.path.join(model_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
@@ -149,7 +163,10 @@ def derive_bbbb_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree
     jet_pt, jet_nn_inputs = grouped_arrays
 
     #Btag input list for first 4 jets
-    nn_outputs = [model.predict(np.asarray(jet_nn_inputs[:, i])) for i in range(0,4)]
+    jet_inputs = [np.asarray(jet_nn_inputs[:, i]) for i in range(0, 4)]
+    input_masks = [get_input_mask(jet_inp, N_FILTERS) for jet_inp in jet_inputs]
+    nn_inputs = [[inp, mask] for inp, mask in zip(jet_inputs, input_masks)]
+    nn_outputs = [model.predict(nn_inp) for nn_inp in nn_inputs]
 
     #Calculate the output sum
     b_index = class_labels['b']
@@ -175,12 +192,12 @@ def derive_bbbb_WPs(model_dir, minbias_path, target_rate=14, n_entries=100, tree
     #Loop through the edges and integrate
     for ht in ht_edges[:-1]:
         for NN in NN_edges[:-1]:
-            
+
             #Calculate the rate
             rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(NN*1.0j, None, sum)}]/n_events
             rate_list.append(rate*MINBIAS_RATE)
 
-            #Append the results   
+            #Append the results
             ht_list.append(ht)
             nn_list.append(NN)
 
@@ -206,7 +223,7 @@ def load_bbbb_WPs(model_dir):
         ht_only_wp = WPs['ht_only_cut']
     else:
         raise Exception("Working point does not exist. Run with --deriveWPs first.")
-    
+
     return btag_wp, btag_ht_wp, ht_only_wp
 
 def bbbb_eff(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
@@ -254,7 +271,7 @@ def bbbb_eff(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
         # If genHH_mass doesn't exist, only group event_id and genpt
         event_id, grouped_gen_arrays = group_id_values(raw_event_id, raw_jet_genpt, num_elements=0)
         all_event_gen_mHH = None
-    
+
     all_jet_genht = ak.sum(grouped_gen_arrays[-1], axis=1)  # Last element will always be genpt
 
     #Group these attributes by event id, and filter out groups that don't have at least 4 elements
@@ -337,10 +354,10 @@ def bbbb_eff(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
     #Plot a different plot comparing the multiclass with ht only selection
     fig2, ax2 = plt.subplots(1, 1, figsize=style.FIGURE_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax2, fontsize=style.MEDIUM_SIZE-2)
-    
-    ax2.errorbar(model_x, model_y, yerr=model_err, c=style.color_cycle[1], fmt='o', linewidth=3, 
+
+    ax2.errorbar(model_x, model_y, yerr=model_err, c=style.color_cycle[1], fmt='o', linewidth=3,
                 label=r'Multiclass @ 14 kHz (L1 $HT$ > {} GeV, $\sum$ 4b > {})'.format(btag_ht_wp, round(btag_wp, 2)))
-    ax2.errorbar(ht_only_x, ht_only_y, yerr=ht_only_err, c=style.color_cycle[2], fmt='o', linewidth=3, 
+    ax2.errorbar(ht_only_x, ht_only_y, yerr=ht_only_err, c=style.color_cycle[2], fmt='o', linewidth=3,
                 label=r'HT-only + QuadJets @ 14 kHz (L1 $HT$ > {} GeV)'.format(ht_only_wp))
 
     # Common plot settings for second plot
@@ -356,7 +373,7 @@ def bbbb_eff(model_dir, signal_path, n_entries=100000, tree='outnano/Jets'):
     ht_compare_path = os.path.join(model_dir, "plots/physics/bbbb/HH_eff_HT_vs_HTonly")
     plt.savefig(f'{ht_compare_path}.pdf', bbox_inches='tight')
     plt.savefig(f'{ht_compare_path}.png', bbox_inches='tight')
-    
+
     plt.show(block=False)
 
 
@@ -365,9 +382,9 @@ def bbbb_eff_mHH(model_dir,
                 event_gen_mHH,
                 cmssw_selection, model_selection, ht_only_selection):
     """
-    Plot HH->4b w.r.t gen m_HH 
+    Plot HH->4b w.r.t gen m_HH
     """
-    
+
     #Define the histogram edges
     mHH_edges = list(np.arange(0,1000,20))
     mHH_axis = hist.axis.Variable(mHH_edges, name = r"$HT^{gen}$")
@@ -399,10 +416,10 @@ def bbbb_eff_mHH(model_dir,
     #Plot a plot comparing the multiclass with ht only selection
     fig, ax = plt.subplots(1, 1, figsize=style.FIGURE_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax, fontsize=style.MEDIUM_SIZE-2)
-    
-    ax.errorbar(model_x, model_y, yerr=model_err, c=style.color_cycle[1], fmt='o', linewidth=3, 
+
+    ax.errorbar(model_x, model_y, yerr=model_err, c=style.color_cycle[1], fmt='o', linewidth=3,
                 label=r'Multiclass @ 14 kHz (L1 $HT$ > {} GeV, $\sum$ 4b > {})'.format(btag_ht_wp, round(btag_wp, 2)))
-    ax.errorbar(ht_only_x, ht_only_y, yerr=ht_only_err, c=style.color_cycle[2], fmt='o', linewidth=3, 
+    ax.errorbar(ht_only_x, ht_only_y, yerr=ht_only_err, c=style.color_cycle[2], fmt='o', linewidth=3,
                 label=r'HT-only + QuadJets @ 14 kHz (L1 $HT$ > {} GeV)'.format(ht_only_wp))
 
     # Common plot settings for second plot
@@ -418,10 +435,10 @@ def bbbb_eff_mHH(model_dir,
     ht_compare_path = os.path.join(model_dir, "plots/physics/bbbb/HH_eff_mHH")
     plt.savefig(f'{ht_compare_path}.pdf', bbox_inches='tight')
     plt.savefig(f'{ht_compare_path}.png', bbox_inches='tight')
-    
+
     plt.show(block=False)
 
-    return 
+    return
 
 if __name__ == "__main__":
     """
@@ -433,14 +450,14 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument('-m','--model_dir', default='output/baseline', help = 'Input model')
-    parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125_addGenH/GluGluHHTo4B_PU200.root' , help = 'Signal sample for HH->bbbb') 
-    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')    
+    parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125_addGenH/GluGluHHTo4B_PU200.root' , help = 'Signal sample for HH->bbbb')
+    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
 
     #Different modes
     parser.add_argument('--deriveWPs', action='store_true', help='derive the working points for b-tagging')
     parser.add_argument('--eff', action='store_true', help='plot efficiency for HH->4b')
 
-    parser.add_argument('--tree', default='outnano/Jets', help='Tree within the ntuple containing the jets')
+    parser.add_argument('--tree', default='jetntuple/Jets', help='Tree within the ntuple containing the jets')
 
     #Other controls
     parser.add_argument('-n','--n_entries', type=int, default=1000, help = 'Number of data entries in root file to run over, can speed up run time, set to None to run on all data entries')

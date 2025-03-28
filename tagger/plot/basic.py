@@ -21,18 +21,16 @@ style.set_style()
 
 ###### DEFINE ALL THE PLOTTING FUNCTIONS HERE!!!! THEY WILL BE CALLED IN basic() function >>>>>>>
 def loss_history(plot_dir, history):
-    fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
-    hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax, fontsize=style.CMSHEADER_SIZE)
-    ax.plot(history.history['loss'], label='Train Loss', linewidth=style.LINEWIDTH)
-    ax.plot(history.history['val_loss'], label='Validation Loss',linewidth=style.LINEWIDTH)
-    ax.grid(True)
-    ax.set_ylabel('Loss')
-    ax.set_xlabel('Epoch')
-    ax.legend(loc='upper right')
-
-    save_path = os.path.join(plot_dir, "loss_history")
-    plt.savefig(f"{save_path}.png", bbox_inches='tight')
-    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+    losses = [l for l in history.history.keys() if 'loss' in l and 'val' not in l]
+    for branch in losses:
+        fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+        hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax, fontsize=style.CMSHEADER_SIZE)
+        ax.plot(history.history[branch], label='Train Loss', linewidth=style.LINEWIDTH)
+        ax.plot(history.history[f"val_{branch}"], label='Validation Loss',linewidth=style.LINEWIDTH)
+        ax.grid(True)
+        ax.set_ylabel('Loss')
+        ax.set_xlabel('Epoch')
+        plt.savefig(f"{plot_dir}/{branch}.pdf", bbox_inches='tight')
 
 def ROC_taus(y_pred, y_test, class_labels, plot_dir):
     """
@@ -70,8 +68,8 @@ def ROC_taus(y_pred, y_test, class_labels, plot_dir):
 
         plt.figure(figsize=style.FIGURE_SIZE)
         hep.cms.label(
-            llabel=style.CMSHEADER_LEFT, 
-            rlabel=style.CMSHEADER_RIGHT, 
+            llabel=style.CMSHEADER_LEFT,
+            rlabel=style.CMSHEADER_RIGHT,
             fontsize=style.CMSHEADER_SIZE
         )
         plt.plot(tpr, fpr, label=f'{label} (AUC = {roc_auc:.2f})', linewidth=style.LINEWIDTH)
@@ -116,7 +114,7 @@ def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
 
     # Combine the labels and scores for binary classification
     selection = (y_true1 == 1) | (y_true2 == 1)
-    y_true_binary = y_true1[selection] 
+    y_true_binary = y_true1[selection]
     y_score_binary = y_score1[selection] / (y_score1[selection] + y_score2[selection])  # Normalized probabilities
 
     # Compute FPR, TPR, and AUC
@@ -291,7 +289,7 @@ def response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_d
 
         uncorrected_response, regressed_response, uncorrected_errors, regressed_errors = get_response(truth_pt_test[flavor_selection], reco_pt_test[flavor_selection], pt_ratio[flavor_selection])
         plot_response(uncorrected_response, regressed_response, uncorrected_errors, regressed_errors, flavor=flavor, plot_name=f"{flavor}_response")
-    
+
     #Taus, jets, leptons rms
     rms_selection = {
         'taus': [class_labels['taup'], class_labels['taum']],
@@ -301,7 +299,7 @@ def response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_d
 
     for key in rms_selection.keys():
         selection = sum(y_test[:, idx] for idx in rms_selection[key]) > 0
-        
+
         uncorrected_response, regressed_response, uncorrected_errors, regressed_errors = get_response(truth_pt_test[selection], reco_pt_test[selection], pt_ratio[selection])
         plot_response(uncorrected_response, regressed_response, uncorrected_errors, regressed_errors, flavor=key, plot_name=f"{key}_response")
 
@@ -439,7 +437,7 @@ def shapPlot(shap_values, feature_names, class_names):
     plt.tight_layout()
 
 def plot_shaply(model, X_test, class_labels, input_vars, plot_dir):
-    
+
     labels = list(class_labels.keys())
     model2 = tf.keras.Model(model.input, model.output[0])
     model3 = tf.keras.Model(model.input, model.output[1])
@@ -473,29 +471,30 @@ def basic(model_dir):
     Plot the basic ROCs for different classes. Does not reflect L1 rate
     Returns a dictionary of ROCs for each class
     """
-    
+
     plot_dir = os.path.join(model_dir, "plots/training")
 
-    #Load the metada for class_label
+    #Load the metadata for class_label
     with open(f"{model_dir}/class_label.json", 'r') as file: class_labels = json.load(file)
     with open(f"{model_dir}/input_vars.json", 'r') as file: input_vars = json.load(file)
 
-    ROC_dict = {class_label : 0 for class_label in class_labels} 
-    
+    ROC_dict = {class_label : 0 for class_label in class_labels}
+
     #Load the testing data
     X_test = np.load(f"{model_dir}/testing_data/X_test.npy")
     y_test = np.load(f"{model_dir}/testing_data/y_test.npy")
+    X_test_mask = np.load(f"{model_dir}/testing_data/X_test_mask.npy")
     truth_pt_test = np.load(f"{model_dir}/testing_data/truth_pt_test.npy")
     reco_pt_test = np.load(f"{model_dir}/testing_data/reco_pt_test.npy")
-    
+
     #Load model
     model = load_qmodel(f"{model_dir}/model/saved_model.h5")
-    model_outputs = model.predict(X_test)
+    model_outputs = model.predict([X_test, X_test_mask])
 
     #Get classification outputs
     y_pred = model_outputs[0]
     pt_ratio = model_outputs[1].flatten()
-    
+
     #Plot ROC curves
     ROC_dict = ROC(y_pred, y_test, class_labels, plot_dir,ROC_dict)
 
@@ -504,7 +503,7 @@ def basic(model_dir):
         for j in class_labels.keys():
             if i != j:
                 class_pair = (i,j)
-                ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair)        
+                ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair)
 
     #ROC for taus versus jets and taus versus leptons
     ROC_taus(y_pred, y_test, class_labels, plot_dir)
@@ -517,11 +516,16 @@ def basic(model_dir):
 
     #Plot inclusive response and individual flavor
     response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
-    
+
     #Plot the rms of the residuals vs pt
     rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
-    
+
     #Plot the shaply feature importance
-    plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
+    # plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
 
     return ROC_dict
+
+
+
+
+

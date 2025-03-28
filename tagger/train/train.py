@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 import os, shutil, json
 
 #Import from other modules
-from tagger.data.tools import make_data, load_data, to_ML
+from tagger.data.tools import make_data, load_data, to_ML, get_input_mask
 from tagger.plot.basic import loss_history, basic
 import models
 
@@ -28,14 +28,17 @@ tf.config.threading.set_intra_op_parallelism_threads(
 )
 
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
-tf.keras.utils.set_random_seed(420) #not a special number 
+tf.keras.utils.set_random_seed(420) #not a special number
 BATCH_SIZE = 1024
-EPOCHS = 100
-VALIDATION_SPLIT = 0.1 # 10% of training set will be used for validation set. 
+EPOCHS = 10
+VALIDATION_SPLIT = 0.1 # 10% of training set will be used for validation set.
 
 # Sparsity parameters
 I_SPARSITY = 0.0 #Initial sparsity
 F_SPARSITY = 0.1 #Final sparsity
+
+# Number of filters in the last convolutional layer
+N_FILTERS = 10
 
 def prune_model(model, num_samples):
     """
@@ -60,12 +63,13 @@ def prune_model(model, num_samples):
 
     return pruned_model
 
-def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, class_labels):
+def save_test_data(out_dir, X_test, y_test, X_test_mask, truth_pt_test, reco_pt_test, class_labels):
 
     os.makedirs(os.path.join(out_dir,'testing_data'), exist_ok=True)
 
     np.save(os.path.join(out_dir, "testing_data/X_test.npy"), X_test)
     np.save(os.path.join(out_dir, "testing_data/y_test.npy"), y_test)
+    np.save(os.path.join(out_dir, "testing_data/X_test_mask.npy"), X_test_mask)
     np.save(os.path.join(out_dir, "testing_data/truth_pt_test.npy"), truth_pt_test)
     np.save(os.path.join(out_dir, "testing_data/reco_pt_test.npy"), reco_pt_test)
     with open(os.path.join(out_dir, "class_label.json"), "w") as f: json.dump(class_labels, f, indent=4) #Dump output variables
@@ -87,21 +91,21 @@ def train_weights(y_train, truth_pt_train, class_labels, pt_flat_weighting=True)
         60, 76, 97, 122, 154, 195, 246, 311,
         393, 496, 627, 792, np.inf  # Use np.inf to cover all higher values
     ])
-    
+
     # Initialize counts per class per pT bin
     class_pt_counts = {}
-    
+
     # Calculate counts per class per pT bin
     for label, idx in class_labels.items():
         class_mask = y_train[:, idx] == 1
         class_pt_counts[idx], _ = np.histogram(truth_pt_train[class_mask], bins=pt_bins)
-    
+
     # Compute the maximum counts per pT bin over all classes
     max_counts_per_bin = np.zeros(len(pt_bins)-1)
     for bin_idx in range(len(pt_bins)-1):
         counts_in_bin = [class_pt_counts[idx][bin_idx] for idx in class_labels.values()]
         max_counts_per_bin[bin_idx] = max(counts_in_bin)
-    
+
     # Compute weights per class per pT bin
     weights_per_class_pt_bin = {}
     for idx in class_labels.values():
@@ -121,9 +125,10 @@ def train_weights(y_train, truth_pt_train, class_labels, pt_flat_weighting=True)
         bin_indices = np.digitize(class_truth_pt, pt_bins) - 1  # Subtract 1 to get 0-based index
         bin_indices[bin_indices == len(pt_bins)-1] = len(pt_bins)-2  # Handle right edge
         sample_weights[sample_indices] = weights_per_class_pt_bin[idx][bin_indices]
-    
+
     # Normalize sample weights
     sample_weights = sample_weights / np.mean(sample_weights)
+    from IPython import embed; embed()
 
     return sample_weights
 
@@ -139,7 +144,7 @@ def train(out_dir, percent, model_name):
 
     #Load the data, class_labels and input variables name, not really using input variable names to be honest
     data_train, data_test, class_labels, input_vars, extra_vars = load_data("training_data/", percentage=percent)
-    
+
     #Save input variables and extra variables metadata
     with open(os.path.join(out_dir, "input_vars.json"), "w") as f: json.dump(input_vars, f, indent=4) #Dump output variables
     with open(os.path.join(out_dir, "extra_vars.json"), "w") as f: json.dump(extra_vars, f, indent=4) #Dump output variables
@@ -149,19 +154,24 @@ def train(out_dir, percent, model_name):
 
     #Save X_test, y_test, and truth_pt_test for plotting later
     X_test, y_test, _, truth_pt_test, reco_pt_test = to_ML(data_test, class_labels)
-    save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, class_labels)
+
+    # Create input mask from training data
+    X_train_mask = get_input_mask(X_train, N_FILTERS)
+    X_test_mask = get_input_mask(X_test, N_FILTERS)
+
+    save_test_data(out_dir, X_test, y_test, X_test_mask, truth_pt_test, reco_pt_test, class_labels)
 
     #Calculate the sample weights for training
     sample_weight = train_weights(y_train, truth_pt_train, class_labels)
 
     #Get input shape
-    input_shape = X_train.shape[1:] #First dimension is batch size
+    input_shape = [X_train.shape[1:], X_train_mask.shape[1:]] #First dimension is batch size
     output_shape = y_train.shape[1:]
 
     #Dynamically get the model
     try:
         model_func = getattr(models, model_name)
-        model = model_func(input_shape, output_shape)  # Assuming the model function doesn't require additional arguments
+        model = model_func(input_shape, output_shape, N_FILTERS)  # Assuming the model function doesn't require additional arguments
     except AttributeError:
         raise ValueError(f"Model '{model_name}' is not defined in the 'models' module.")
 
@@ -174,7 +184,7 @@ def train(out_dir, percent, model_name):
                  EarlyStopping(monitor='val_loss', patience=10),
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
-    history = pruned_model.fit({'model_input': X_train},
+    history = pruned_model.fit({'model_input': X_train, 'mask_input': X_train_mask},
                             {'prune_low_magnitude_jet_id_output': y_train, 'prune_low_magnitude_pT_output': pt_target_train},
                             sample_weight=sample_weight,
                             epochs=EPOCHS,
@@ -183,7 +193,7 @@ def train(out_dir, percent, model_name):
                             validation_split=VALIDATION_SPLIT,
                             callbacks = [callbacks],
                             shuffle=True)
-    
+
     #Export the model
     model_export = tfmot.sparsity.keras.strip_pruning(pruned_model)
 
@@ -242,7 +252,7 @@ if __name__ == "__main__":
             results = basic(model_dir)
             for class_label in results.keys():
                 mlflow.log_metric(class_label + ' ROC AUC',results[class_label])
-            
+
     else:
         with mlflow.start_run(run_name=args.name) as run:
             mlflow.set_tag('gitlab.CI_JOB_ID', os.getenv('CI_JOB_ID'))
@@ -253,5 +263,5 @@ if __name__ == "__main__":
         print(run_id, end="", file = sourceFile)
         sourceFile.close()
 
-        
-        
+
+
