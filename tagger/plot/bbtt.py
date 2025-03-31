@@ -278,7 +278,7 @@ def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate, RateRange
     for ht in ht_edges[:-1]:
 
         #Calculate the rate
-        rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn_bb": slice(0.0j, None, sum)}][{"nn_tt": slice(0.0j, None, sum)}]/n_events
+        rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(0.0j, None, sum)}]/n_events
         rate_list.append(rate*MINBIAS_RATE)
 
         #Append the results
@@ -372,8 +372,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     # refill with full ht for ht wp derivation
     RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
-                    hist.axis.Variable(NN_edges, name="nn_bb", label="nn_bb"),
-                    hist.axis.Variable(NN_edges, name="nn_tt", label="nn_tt"))
+                    hist.axis.Variable(NN_edges, name="nn", label="nn"))
 
     RateHist.fill(ht = jet_ht, nn = np.zeros(len(jet_ht)))
     derive_HT_WP(RateHist, ht_edges, n_events, model_dir, rate)
