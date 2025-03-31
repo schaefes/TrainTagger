@@ -135,7 +135,7 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht, raw_score, apply_sel
     indices[np.arange(len(indices)).reshape(-1, 1), tau_indices] = -1
     b_indices = np.sort(indices, axis=1)[:, -2:]
     bscore_sum = b_preds[np.arange(len(b_preds)).reshape(-1, 1), b_indices].sum(axis=1)
-    bscore_sum, tscore_sum = [score[def_sel] for score in [bscore_sum, tscore_sum]]
+    bscore_sum, tscore_sum, event_ht = [score[def_sel] for score in [bscore_sum, tscore_sum, event_ht]]
 
     # Calculate the efficiency
     target_rate_eff = np.zeros(len(target_rate_ht))
