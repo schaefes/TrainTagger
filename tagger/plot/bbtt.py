@@ -26,8 +26,8 @@ from common import MINBIAS_RATE, WPs_CMSSW, find_rate, plot_ratio, get_bar_patch
 def bbtt_seed(jet_pt, tau_pt):
     # tau pt thresholds L1_DoubleIsoTau34er2p1
     tau_pt = ak.sort(tau_pt, axis=1, ascending=False)
-    tau_pt1 = (tau_pt[:, 0] >= 15)
-    tau_pt2 = (tau_pt[:, 1] >= 15)
+    tau_pt1 = (tau_pt[:, 0] >= 34)
+    tau_pt2 = (tau_pt[:, 1] >= 34)
     tau_pt_mask = tau_pt1 & tau_pt2
 
     ht = ak.sum(jet_pt, axis=1)
@@ -135,7 +135,7 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht, raw_score, apply_sel
     indices[np.arange(len(indices)).reshape(-1, 1), tau_indices] = -1
     b_indices = np.sort(indices, axis=1)[:, -2:]
     bscore_sum = b_preds[np.arange(len(b_preds)).reshape(-1, 1), b_indices].sum(axis=1)
-    bscore_sum, tscore_sum = [score[def_sel] for score in [bscore_sum, tscore_sum]]
+    bscore_sum, tscore_sum, event_ht = [score[def_sel] for score in [bscore_sum, tscore_sum, event_ht]]
 
     # Calculate the efficiency
     target_rate_eff = np.zeros(len(target_rate_ht))
@@ -167,25 +167,25 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht, raw_score, apply_sel
         json.dump(fixed_ht_wp, f, indent=4)
 
     # plot
-    fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
-    hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
-    im = ax.scatter(target_bb, target_tt, c=target_eff, s=500, marker='s',
-                    cmap='Spectral_r',
-                    linewidths=0,
-                    norm=matplotlib.colors.LogNorm())
+    # fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+    # hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
+    # im = ax.scatter(target_bb, target_tt, c=target_eff, s=500, marker='s',
+    #                 cmap='Spectral_r',
+    #                 linewidths=0,
+    #                 norm=matplotlib.colors.LogNorm())
 
-    cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label(f"Efficiency at HT={ht}, {target_rate} [kHZ]")
+    # cbar = plt.colorbar(im, ax=ax)
+    # cbar.set_label(f"Efficiency at HT={ht}, {target_rate} [kHZ]")
 
-    ax.set_ylabel(r"$\sum_{\tau^{+}_{max}\tau^{-}_{max}}$ scores")
-    ax.set_xlabel(r"$\sum_{2~leading~jets}$ b scores")
+    # ax.set_ylabel(r"$\sum_{\tau^{+}_{max}\tau^{-}_{max}}$ scores")
+    # ax.set_xlabel(r"$\sum_{2~leading~jets}$ b scores")
 
-    ax.set_xlim([0,2])
-    ax.set_ylim([0,2])
+    # ax.set_xlim([0,2])
+    # ax.set_ylim([0,2])
 
-    ax.legend(loc='upper right')
-    plt.savefig(f"{plot_dir}/bbtt_rate.pdf", bbox_inches='tight')
-    plt.savefig(f"{plot_dir}/bbtt_rate.png", bbox_inches='tight')
+    # ax.legend(loc='upper right')
+    # plt.savefig(f"{plot_dir}/bbtt_rate.pdf", bbox_inches='tight')
+    # plt.savefig(f"{plot_dir}/bbtt_rate.png", bbox_inches='tight')
 
 def make_predictions(data_path, model_dir, n_entries, tree='jetntuple/Jets', njets=4):
     data = uproot.open(data_path)[tree]
@@ -278,7 +278,7 @@ def derive_HT_WP(RateHist, ht_edges, n_events, model_dir, target_rate, RateRange
     for ht in ht_edges[:-1]:
 
         #Calculate the rate
-        rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn_bb": slice(0.0j, None, sum)}][{"nn_tt": slice(0.0j, None, sum)}]/n_events
+        rate = RateHist[{"ht": slice(ht*1j, None, sum)}][{"nn": slice(0.0j, None, sum)}]/n_events
         rate_list.append(rate*MINBIAS_RATE)
 
         #Append the results
@@ -338,7 +338,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,2) for i in np.arange(0, 1.5, 0.01)]) + [2.0]
+    NN_edges = list([round(i,2) for i in np.arange(0, 1.5, 0.02)]) + [2.0]
 
     # for raw and vs light preds
     raw = True
@@ -519,7 +519,7 @@ if __name__ == "__main__":
     """
 
     parser = ArgumentParser()
-    parser.add_argument('-m','--model_dir', default='output/baseline', help = 'Input model')
+    parser.add_argument('-m','--model_dir', default='/eos/user/s/stella/TrainTagger/output/baseline', help = 'Input model')
     parser.add_argument('-s', '--signal', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/ggHHbbtt_PU200.root' , help = 'Signal sample for HH->bbtt')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
 
