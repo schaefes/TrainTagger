@@ -48,11 +48,11 @@ def x_vs_y(x, y, apply_light=True):
 def default_selection(jet_pt, jet_eta, indices, apply_sel):
     if apply_sel == "tau":
         rows = np.arange(len(jet_pt)).reshape((-1, 1))
-        mask = (jet_pt[rows, indices] > 10) & (np.abs(jet_eta[rows, indices]) < 2.4)
+        mask = (jet_pt[rows, indices] > 7) & (np.abs(jet_eta[rows, indices]) < 2.4)
         event_mask = np.sum(mask, axis=1) == 2
     elif apply_sel == "all":
         rows = np.arange(len(jet_pt)).reshape((-1, 1))
-        mask = (jet_pt[:,:4] > 10) & (np.abs(jet_eta[:,:4]) < 2.4)
+        mask = (jet_pt[:,:4] > 5) & (np.abs(jet_eta[:,:4]) < 2.4)
         event_mask = np.sum(mask, axis=1) == 4
     else:
         event_mask = np.ones(len(jet_pt), dtype=bool)
@@ -92,7 +92,7 @@ def nn_score_sums(model, jet_nn_inputs, class_labels, n_jets=4):
 
     return bscore_sums, tscore_sums, tau_indices
 
-def pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht, raw_score, apply_sel, model_dir, signal_path, n_entries, target_rate):
+def pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht, raw_score, apply_sel, model_dir, signal_path, n_entries, target_rate, tree):
     """
     Pick the working points and plot
     """
@@ -108,7 +108,7 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht, raw_score, apply_sel
     target_rate_ht = np.array([ht_list[i] for i in target_rate_idx]) # HT cut dimension
 
     # Get the signal predictions and class labels
-    signal_preds, n_events, signal_pt, signal_eta = make_predictions(signal_path, model_dir, n_entries)
+    signal_preds, n_events, signal_pt, signal_eta = make_predictions(signal_path, model_dir, n_entries, tree=tree)
     event_ht = ak.sum(signal_pt, axis=1)
 
     with open(os.path.join(model_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
@@ -187,7 +187,7 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht, raw_score, apply_sel
     # plt.savefig(f"{plot_dir}/bbtt_rate.pdf", bbox_inches='tight')
     # plt.savefig(f"{plot_dir}/bbtt_rate.png", bbox_inches='tight')
 
-def make_predictions(data_path, model_dir, n_entries, tree='jetntuple/Jets', njets=4):
+def make_predictions(data_path, model_dir, n_entries, tree='outnano/Jets', njets=4):
     data = uproot.open(data_path)[tree]
 
     model = load_qmodel(os.path.join(model_dir, "model/saved_model.h5"))
@@ -260,6 +260,7 @@ def derive_rate(minbias_path, model_dir, n_entries=100000, tree='jetntuple/Jets'
     os.makedirs(rate_dir, exist_ok=True)
     with open(os.path.join(rate_dir, f"bbtt_seed_rate.json"), "w") as f:
         json.dump(rate, f, indent=4)
+    print(f"Derived rate: {rate['rate']} kHz")
 
     return
 
@@ -338,7 +339,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,2) for i in np.arange(0, 1.5, 0.02)]) + [2.0]
+    NN_edges = list([round(i,2) for i in np.arange(0, .8, 0.01)]) + [2.0]
 
     # for raw and vs light preds
     raw = True
@@ -367,7 +368,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
                 tt_list.append(tt)
 
         #Pick target rate and plot it
-        pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht_cut, raw, apply_sel, model_dir, signal_path, n_entries, rate)
+        pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht_cut, raw, apply_sel, model_dir, signal_path, n_entries, rate, tree)
         raw = False
 
     # refill with full ht for ht wp derivation
@@ -392,21 +393,22 @@ def bbtt_eff_HT(model_dir, signal_path, score_type, apply_sel, n_entries=100000,
 
     #Check if the working point have been derived
     WP_path_220 = os.path.join(model_dir, f"plots/physics/bbtt/bbtt_fixed_220_wp_{score_type}_{apply_sel}.json")
-    WP_path_ht2 = os.path.join(model_dir, f"plots/physics/bbtt/bbtt_fixed_ht2_wp_{score_type}_{apply_sel}.json")
+    WP_path_ht2 = os.path.join(model_dir, f"plots/physics/bbtt/bbtt_fixed_190_wp_{score_type}_{apply_sel}.json")
     HT_path = os.path.join(model_dir, "plots/physics/bbtt/ht_working_point.json")
 
     #Get derived working points
-    if os.path.exists(WP_path_220):
+    if os.path.exists(WP_path_220) & os.path.exists(WP_path_ht2) & os.path.exists(HT_path):
+        # first WP Path
         with open(WP_path_220, "r") as f:  WPs = json.load(f)
         btag_wp_220 = WPs['BB']
         ttag_wp_220 = WPs['TT']
         ht_wp_220 = WPs['HT']
-    if os.path.exists(WP_path_ht2):
+        # second WP Path
         with open(WP_path_ht2, "r") as f:  WPs = json.load(f)
         btag_wp_ht2 = WPs['BB']
         ttag_wp_ht2 = WPs['TT']
         ht_wp_ht2 = WPs['HT']
-    if os.path.exists(HT_path):
+        # HT only WP Path
         with open(HT_path, "r") as f:  WPs = json.load(f)
         ht_only_wp = WPs['ht_only_cut']
     else:
@@ -519,16 +521,16 @@ if __name__ == "__main__":
     """
 
     parser = ArgumentParser()
-    parser.add_argument('-m','--model_dir', default='/eos/user/s/stella/TrainTagger/output/baseline', help = 'Input model')
-    parser.add_argument('-s', '--signal', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/ggHHbbtt_PU200.root' , help = 'Signal sample for HH->bbtt')
-    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_4param_021024/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
+    parser.add_argument('-m','--model_dir', default='output/baseline', help = 'Input model')
+    parser.add_argument('-s', '--signal', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/GluGluHHTo2B2Tau_PU200.root' , help = 'Signal sample for HH->bbtt')
+    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
 
     #Different modes
     parser.add_argument('--deriveRate', action='store_true', help='derive the rate for the bbtt seed')
     parser.add_argument('--deriveWPs', action='store_true', help='derive the working points for b-tagging')
     parser.add_argument('--eff', action='store_true', help='plot efficiency for HH->bbtt')
 
-    parser.add_argument('--tree', default='jetntuple/Jets', help='Tree within the ntuple containing the jets')
+    parser.add_argument('--tree', default='outnano/Jets', help='Tree within the ntuple containing the jets')
 
     #Other controls
     parser.add_argument('-n','--n_entries', type=int, default=1000, help = 'Number of data entries in root file to run over, can speed up run time, set to None to run on all data entries')
