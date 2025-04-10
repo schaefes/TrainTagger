@@ -166,27 +166,6 @@ def pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht, raw_score, apply_sel
     with open(os.path.join(plot_dir, f"bbtt_fixed_{ht}_wp_{score_type}_{apply_sel}.json"), "w") as f:
         json.dump(fixed_ht_wp, f, indent=4)
 
-    # plot
-    # fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
-    # hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
-    # im = ax.scatter(target_bb, target_tt, c=target_eff, s=500, marker='s',
-    #                 cmap='Spectral_r',
-    #                 linewidths=0,
-    #                 norm=matplotlib.colors.LogNorm())
-
-    # cbar = plt.colorbar(im, ax=ax)
-    # cbar.set_label(f"Efficiency at HT={ht}, {target_rate} [kHZ]")
-
-    # ax.set_ylabel(r"$\sum_{\tau^{+}_{max}\tau^{-}_{max}}$ scores")
-    # ax.set_xlabel(r"$\sum_{2~leading~jets}$ b scores")
-
-    # ax.set_xlim([0,2])
-    # ax.set_ylim([0,2])
-
-    # ax.legend(loc='upper right')
-    # plt.savefig(f"{plot_dir}/bbtt_rate.pdf", bbox_inches='tight')
-    # plt.savefig(f"{plot_dir}/bbtt_rate.png", bbox_inches='tight')
-
 def make_predictions(data_path, model_dir, n_entries, tree='outnano/Jets', njets=4):
     data = uproot.open(data_path)[tree]
 
@@ -490,7 +469,7 @@ def bbtt_eff_HT(model_dir, signal_path, score_type, apply_sel, n_entries=100000,
     #Now plot all
     fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.MEDIUM_SIZE-2)
-    ax.bar(bin_centers, normalized_counts, width=bin_width, fill=False, edgecolor='grey')
+    hep.histplot((normalized_counts, bin_edges), ax=ax, histtype='step', color='grey', label=r"$HT^{gen}$")
     ax.errorbar(baseline_x, baseline_y, yerr=baseline_err, c=style.color_cycle[0], fmt='o', linewidth=3, label=r'bb$\tau \tau$ seed@ {} kHz (L1 $HT$ > {} GeV, $\tau 1,2 p_T$ > {} GeV)'.format(rate, 220, 34))
     ax.errorbar(model_x_220, model_y_220, yerr=model_err_220, c=style.color_cycle[1], fmt='o', linewidth=3, label=r'Multiclass @ {} kHz (L1 $HT$ > {} GeV, $\sum$ $\tau\tau$ > {}, $\sum$ bb > {})'.format(rate, ht_wp_220, round(ttag_wp_220,2), round(btag_wp_220,2)))
     ax.errorbar(model_x_ht2, model_y_ht2, yerr=model_err_ht2, c=style.color_cycle[2], fmt='o', linewidth=3, label=r'Multiclass @ {} kHz (L1 $HT$ > {} GeV, $\sum$ $\tau\tau$ > {}, $\sum$ bb > {})'.format(rate, ht_wp_ht2, round(ttag_wp_ht2,2), round(btag_wp_ht2,2)))
@@ -499,7 +478,7 @@ def bbtt_eff_HT(model_dir, signal_path, score_type, apply_sel, n_entries=100000,
     #Plot other labels
     ax.hlines(1, 0, 800, linestyles='dashed', color='black', linewidth=4)
     ax.grid(True)
-    ax.set_ylim([0., 1.1])
+    ax.set_ylim([0., 1.15])
     ax.set_xlim([0, 800])
     ax.set_xlabel(r"$HT^{gen}$ [GeV]")
     ax.set_ylabel(r"$\epsilon$(HH $\to$ bb$\tau \tau$ trigger rate at {} kHz)".format(rate))
