@@ -1,4 +1,5 @@
 import os, json
+import gc
 from argparse import ArgumentParser
 
 from qkeras.utils import load_qmodel
@@ -519,9 +520,14 @@ if __name__ == "__main__":
         derive_rate(args.minbias, args.model_dir, n_entries=args.n_entries,tree=args.tree)
     if args.deriveWPs:
         derive_bbtt_WPs(args.model_dir, args.minbias, 220, 'tau', args.signal, n_entries=args.n_entries,tree=args.tree)
+        gc.collect()
         derive_bbtt_WPs(args.model_dir, args.minbias, 220, 'all', args.signal, n_entries=args.n_entries,tree=args.tree)
+        gc.collect()
         derive_bbtt_WPs(args.model_dir, args.minbias, 190, 'tau', args.signal, n_entries=args.n_entries,tree=args.tree)
+        gc.collect()
         derive_bbtt_WPs(args.model_dir, args.minbias, 190, 'all', args.signal, n_entries=args.n_entries,tree=args.tree)
+        gc.collect()
     elif args.eff:
         bbtt_eff_HT(args.model_dir, args.signal, 'raw', 'tau', n_entries=args.n_entries,tree=args.tree)
+        gc.collect()
         bbtt_eff_HT(args.model_dir, args.signal, 'vs_light', 'all', n_entries=args.n_entries,tree=args.tree)
