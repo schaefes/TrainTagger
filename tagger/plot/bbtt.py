@@ -79,9 +79,10 @@ def nn_score_sums(model, jet_nn_inputs, class_labels, n_jets=4):
     taum_preds = np.transpose([pred_score[:, taum_index] for pred_score in nn_outputs])
     b_preds = np.transpose([pred_score[:, b_index] for pred_score in nn_outputs])
 
-    bscore_sums, tscore_sums = [], []
+    bscore_sums, tscore_sums, tscore_idxs = [], [], []
     for b, taup, taum in zip([b_preds, b_vs_l], [taup_preds, taup_vs_l], [taum_preds, taum_vs_l]):
         tscore_sum, tau_indices = max_tau_sum(taup, taum)
+        tscore_idxs.append(tau_indices)
         tscore_sums.append(tscore_sum)
 
         # use b scores from the remaining 2 jets
@@ -306,24 +307,23 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
     jet_pt, jet_eta, jet_nn_inputs = grouped_arrays
 
     bscore_sums, tscore_sums, tau_indices = nn_score_sums(model, jet_nn_inputs, class_labels)
-    def_sel = default_selection(jet_pt, jet_eta, tau_indices, apply_sel)
+    def_sels = [default_selection(jet_pt, jet_eta, tau_indices[0], apply_sel),
+               default_selection(jet_pt, jet_eta, tau_indices[1], apply_sel)]
 
     # apply the kinemeatic default selelction
-    bscore_sums, tscore_sums = [b_sum[def_sel] for b_sum in bscore_sums], [t_sum[def_sel] for t_sum in tscore_sums]
+    bscore_sums = [b_sum[def_sel] for b_sum, def_sel in zip(bscore_sums, def_sels)]
+    tscore_sums = [t_sum[def_sel] for t_sum, def_sel in zip(tscore_sums, def_sels)]
 
     jet_ht = ak.sum(jet_pt, axis=1)
-    sel_ht = jet_ht[def_sel]
-
-    assert(len(bscore_sums[0]) == len(sel_ht))
-    assert(len(bscore_sums[1]) == len(sel_ht))
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,2) for i in np.arange(0, .8, 0.01)]) + [2.0]
+    NN_edges = list([round(i,3) for i in np.arange(0, .8, 0.005)]) + [2.0]
 
     # for raw and vs light preds
     raw = True
-    for bscore_sum, tscore_sum in zip(bscore_sums, tscore_sums):
+    for bscore_sum, tscore_sum, def_sel in zip(bscore_sums, tscore_sums, def_sels):
+        sel_ht = jet_ht[def_sel]
         RateHist = Hist(hist.axis.Variable(ht_edges, name="ht", label="ht"),
                         hist.axis.Variable(NN_edges, name="nn_bb", label="nn_bb"),
                         hist.axis.Variable(NN_edges, name="nn_tt", label="nn_tt"))
@@ -334,6 +334,9 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
         ht_list = []
         bb_list = []
         tt_list = []
+
+        assert(len(tscore_sum) == len(sel_ht))
+        assert(len(bscore_sum) == len(sel_ht))
 
         #Loop through the edges and integrate
         for bb in NN_edges[:-1]:
@@ -349,6 +352,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
         #Pick target rate and plot it
         pick_and_plot(rate_list, ht_list, bb_list, tt_list, ht_cut, raw, apply_sel, model_dir, signal_path, n_entries, rate, tree)
+        gc.collect()
         raw = False
 
     # refill with full ht for ht wp derivation
@@ -421,15 +425,16 @@ def bbtt_eff_HT(model_dir, signal_path, score_type, apply_sel, n_entries=100000,
     # Result from the baseline selection, multiclass tagger and ht only working point
     baseline_selection, _ = bbtt_seed(jet_pt, tau_pt)
     model_bscore_sums, model_tscore_sums, tau_indices = nn_score_sums(model, jet_nn_inputs, class_labels)
-    default_sel = default_selection(jet_pt, jet_eta, tau_indices, apply_sel)
 
     # use either raw or vs light scores
     if score_type == 'raw':
         model_bscore_sum = model_bscore_sums[0]
         model_tscore_sum = model_tscore_sums[0]
+        default_sel = default_selection(jet_pt, jet_eta, tau_indices[0], apply_sel)
     else:
         model_bscore_sum = model_bscore_sums[1]
         model_tscore_sum = model_tscore_sums[1]
+        default_sel = default_selection(jet_pt, jet_eta, tau_indices[1], apply_sel)
 
     model_selection_220 = (jet_ht > ht_wp_220) & (model_bscore_sum > btag_wp_220) & (model_tscore_sum > ttag_wp_220) & default_sel
     model_selection_ht2 = (jet_ht > ht_wp_ht2) & (model_bscore_sum > btag_wp_ht2) & (model_tscore_sum > ttag_wp_ht2) & default_sel
@@ -501,7 +506,7 @@ if __name__ == "__main__":
     """
 
     parser = ArgumentParser()
-    parser.add_argument('-m','--model_dir', default='output/baseline', help = 'Input model')
+    parser.add_argument('-m','--model_dir', default='/eos/user/s/stella/TrainTagger/output/baseline', help = 'Input model')
     parser.add_argument('-s', '--signal', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/GluGluHHTo2B2Tau_PU200.root' , help = 'Signal sample for HH->bbtt')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
 
