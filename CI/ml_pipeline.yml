@@ -143,9 +143,6 @@ hls4ml:
   needs: [train]
   script:
   - source activate tagger
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
   - python tagger/firmware/hls4ml_convert.py
   artifacts:
     paths:
@@ -182,9 +179,6 @@ emulation-evaluate:
   - cd data
   - cp ../${CMSSW_VERSION}/src/FastPUPPI/NtupleProducer/python/jetTuple_${TRACK_ALGO}_${N_PARAMS}.root .
   - cd ..
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
   - source activate tagger
   - python tagger/plot/makeEmulationPlot.py -r True -i data/jetTuple_${TRACK_ALGO}_${N_PARAMS}.root
   artifacts:
@@ -207,9 +201,6 @@ profile:
   - cd data
   - cp ../${CMSSW_VERSION}/src/FastPUPPI/NtupleProducer/python/jetTuple_${TRACK_ALGO}_${N_PARAMS}.root .
   - cd ..
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
   - pip uninstall hls4ml -y
   - git clone https://github.com/CMS-L1T-Jet-Tagging/hls4ml.git -b jet_tagger
   - cd hls4ml
