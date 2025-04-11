@@ -228,18 +228,18 @@ if __name__ == "__main__":
         make_data(infile=args.input, step_size=args.step, extras=args.extras, ratio=args.ratio, tree=args.tree) #Write to training_data/, can be specified using outdir, but keeping it simple here for now
     elif args.plot_basic:
         model_dir = args.output
-        f = open("mlflow_run_id.txt", "r")
-        run_id = (f.read())
-        mlflow.get_experiment_by_name(os.getenv('CI_COMMIT_REF_NAME'))
-        with mlflow.start_run(experiment_id=1,
-                            run_name=args.name,
-                            run_id=run_id # pass None to start a new run
-                            ):
-
-            #All the basic plots!
-            results = basic(model_dir)
-            for class_label in results.keys():
-                mlflow.log_metric(class_label + ' ROC AUC',results[class_label])
+        #All the basic plots!
+        results = basic(model_dir)
+        if os.path.isfile("mlflow_run_id.txt"):
+            f = open("mlflow_run_id.txt", "r")
+            run_id = (f.read())
+            mlflow.get_experiment_by_name(os.getenv('CI_COMMIT_REF_NAME'))
+            with mlflow.start_run(experiment_id=1,
+                                run_name=args.name,
+                                run_id=run_id # pass None to start a new run
+                                ):
+                for class_label in results.keys():
+                    mlflow.log_metric(class_label + ' ROC AUC',results[class_label])
             
     else:
         with mlflow.start_run(run_name=args.name) as run:
