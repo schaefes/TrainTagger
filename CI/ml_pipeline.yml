@@ -125,7 +125,11 @@ evaluate:
   variables:
     KUBERNETES_MEMORY_REQUEST: 32Gi
     KUBERNETES_CPU_REQUEST: 2
-  needs: [train]
+  needs:
+    - job: train
+      optional: true
+    - job: train_basic_plots
+      optional: true
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
@@ -235,7 +239,13 @@ profile:
   variables:
     KUBERNETES_MEMORY_REQUEST: 8Gi
     KUBERNETES_CPU_REQUEST: 2
-  needs: [emulate,train,hls4ml]
+  needs:
+    - job: train
+      optional: true
+    - job: train_basic_plots
+      optional: true
+    - job: emulate
+    - job: hls4ml
   script:
   - source activate tagger
   - mkdir data
@@ -264,7 +274,13 @@ upload_new_model:
   variables:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_CPU_REQUEST: 1
-  needs: [emulation-evaluate,hls4ml,train,evaluate,profile]
+  needs:
+    - job: train
+      optional: true
+    - job: hls4ml
+    - job: emulation-evaluate
+    - job: evaluate
+    - job: profile
   rules:
     - if: $RERUN_ON_TAG == "False"
   before_script:
@@ -315,7 +331,14 @@ upload_tagged_model:
   variables:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_CPU_REQUEST: 1
-  needs: [emulation-evaluate,hls4ml,train,evaluate,profile]
+    needs:
+    - job: train_basic_plots
+      optional: true
+    - job: emulate
+    - job: hls4ml
+    - job: emulation-evaluate
+    - job: evaluate
+    - job: profile
   rules:
     - if: $RERUN_ON_TAG == "True"
   before_script:
