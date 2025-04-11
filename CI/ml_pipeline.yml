@@ -213,7 +213,13 @@ emulation-evaluate:
   variables:
     KUBERNETES_MEMORY_REQUEST: 8Gi
     KUBERNETES_CPU_REQUEST: 2
-  needs: [emulate,train,hls4ml]
+  needs:
+    - job: train
+      optional: true
+    - job: train_basic_plots
+      optional: true
+    - job: emulate
+    - job: hls4ml
   script:
   - mkdir data
   - cd data
@@ -329,7 +335,7 @@ upload_tagged_model:
   variables:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_CPU_REQUEST: 1
-    needs:
+  needs:
     - job: train_basic_plots
       optional: true
     - job: emulate
