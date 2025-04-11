@@ -143,7 +143,8 @@ hls4ml:
   extends:
     - .template
   stage: hls4ml
-  needs: [train]
+  needs: 
+    - job : train
   script:
   - source activate tagger
   - python tagger/firmware/hls4ml_convert.py
@@ -176,7 +177,8 @@ emulation-evaluate:
   variables:
     KUBERNETES_MEMORY_REQUEST: 8Gi
     KUBERNETES_CPU_REQUEST: 2
-  needs: [train,emulate,hls4ml]
+  needs: [emulate,train,hls4ml]
+  dependencies: [emulate,train,hls4ml]
   script:
   - mkdir data
   - cd data
@@ -197,7 +199,8 @@ profile:
   variables:
     KUBERNETES_MEMORY_REQUEST: 8Gi
     KUBERNETES_CPU_REQUEST: 2
-  needs: [train,emulate,hls4ml]
+  needs: [emulate,synth,train]
+  dependencies: [emulate,synth,train]
   script:
   - source activate tagger
   - mkdir data
@@ -223,7 +226,8 @@ upload_new_model:
   variables:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_CPU_REQUEST: 1
-  needs: [train,hls4ml,emulation-evaluate,evaluate,profile]
+  needs: [emulation-evaluate,hls4ml,train,evaluate,profile]
+  dependencies: [emulation-evaluate,hls4ml,train,evaluate,profile]
   rules:
     - if: $RERUN_ON_TAG == "False"
   before_script:
@@ -274,7 +278,8 @@ upload_tagged_model:
   variables:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_CPU_REQUEST: 1
-  needs: [train,emulate,hls4ml,emulation-evaluate,evaluate,profile]
+  needs: [emulation-evaluate,hls4ml,train,evaluate,profile]
+  dependencies: [emulation-evaluate,hls4ml,train,evaluate,profile]
   rules:
     - if: $RERUN_ON_TAG == "True"
   before_script:
