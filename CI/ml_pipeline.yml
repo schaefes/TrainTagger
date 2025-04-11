@@ -71,39 +71,11 @@ train:
   needs:
     - job : data
       optional: true
-  rules:
-    - if: $RERUN_ON_TAG == "False"
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
   - source activate tagger
   - ./CI/run_training.sh $RERUN_ON_TAG
-  artifacts:
-    paths:
-      - output
-      - mlflow_run_id.txt
-    exclude:
-      - .npy
-    expire_in: 1 day
-
-train_basic_plots:
-  extends:
-    - .template
-  stage: train
-  needs: 
-    - job : data
-      optional: true
-  rules:
-    - if: $RERUN_ON_TAG == "True"
-  script:
-  - mkdir output/baseline/model
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
-  - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
-  - tar -xf training_data_$Inputs.tgz
-  - source activate tagger
-  - python tagger/train/train.py --plot-basic -n $Name
   artifacts:
     paths:
       - output
@@ -120,11 +92,7 @@ evaluate:
   variables:
     KUBERNETES_MEMORY_REQUEST: 32Gi
     KUBERNETES_CPU_REQUEST: 2
-  needs:
-    - job: train
-      optional: true
-    - job: train_basic_plots
-      optional: true
+  needs: [train]
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
@@ -172,11 +140,7 @@ hls4ml:
   extends:
     - .template
   stage: hls4ml
-  needs:
-    - job: train
-      optional: true
-    - job: train_basic_plots
-      optional: true
+  needs: [train]
   script:
   - source activate tagger
   - cd output/baseline/model
@@ -193,9 +157,7 @@ synth:
     - fpga-large
   image: registry.cern.ch/ci4fpga/vivado:2023.2
   stage: synth
-  needs: 
-    - job: hls4ml
-      optional: true
+  needs: [hls4ml]
   script:
     - cd tagger/firmware/L1TSC4NGJetModel
     - vitis_hls -f build_prj.tcl
@@ -214,15 +176,7 @@ emulation-evaluate:
   variables:
     KUBERNETES_MEMORY_REQUEST: 8Gi
     KUBERNETES_CPU_REQUEST: 2
-  needs:
-    - job: train
-      optional: true
-    - job: train_basic_plots
-      optional: true
-    - job: emulate
-      optional: true
-    - job: hls4ml
-      optional: true
+  needs: [train,emulate,hls4ml]
   script:
   - mkdir data
   - cd data
@@ -246,15 +200,7 @@ profile:
   variables:
     KUBERNETES_MEMORY_REQUEST: 8Gi
     KUBERNETES_CPU_REQUEST: 2
-  needs:
-    - job: train
-      optional: true
-    - job: train_basic_plots
-      optional: true
-    - job: emulate
-      optional: true
-    - job: hls4ml
-      optional: true
+  needs: [train,emulate,hls4ml]
   script:
   - source activate tagger
   - mkdir data
@@ -283,17 +229,7 @@ upload_new_model:
   variables:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_CPU_REQUEST: 1
-  needs:
-    - job: train
-      optional: true
-    - job: hls4ml
-      optional: true
-    - job: emulation-evaluate
-      optional: true
-    - job: evaluate
-      optional: true
-    - job: profile
-      optional: true
+  needs: [train,hls4ml,emulation-evaluate,evaluate,profile]
   rules:
     - if: $RERUN_ON_TAG == "False"
   before_script:
@@ -344,19 +280,7 @@ upload_tagged_model:
   variables:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_CPU_REQUEST: 1
-  needs:
-    - job: train_basic_plots
-      optional: true
-    - job: emulate
-      optional: true
-    - job: hls4ml
-      optional: true
-    - job: emulation-evaluate
-      optional: true
-    - job: evaluate
-      optional: true
-    - job: profile
-      optional: true
+  needs: [train,emulate,hls4ml,emulation-evaluate,evaluate,profile]
   rules:
     - if: $RERUN_ON_TAG == "True"
   before_script:
