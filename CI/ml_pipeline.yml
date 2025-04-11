@@ -25,7 +25,7 @@ variables:
     SCRAM_ARCH: 'el9_amd64_gcc12'
     CMSSW_VERSION: 'CMSSW_14_2_0_pre2'
     CMSSW_L1CT: 'CMS-L1T-Jet-Tagging:14_2_pre2_L1TSC4NGJetTagger'
-    MODEL_LOCATION: ${EOS_STORAGE_DIR}/tags/${TAG}/model
+    MODEL_LOCATION: ${EOS_STORAGE_DIR}/tags/${TAG}
     RERUN_ON_TAG: 'True'
     TAG: 'v0.0.0'
 
