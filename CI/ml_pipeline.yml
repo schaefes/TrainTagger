@@ -168,7 +168,7 @@ hls4ml:
   extends:
     - .template
   stage: hls4ml
-  needs: train
+  needs: [train]
   script:
   - source activate tagger
   - cd output/baseline/model
@@ -185,7 +185,7 @@ synth:
     - fpga-large
   image: registry.cern.ch/ci4fpga/vivado:2023.2
   stage: synth
-  needs: hls4ml
+  needs: [hls4ml]
   script:
     - cd tagger/firmware/L1TSC4NGJetModel
     - vitis_hls -f build_prj.tcl
