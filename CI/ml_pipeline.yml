@@ -78,11 +78,7 @@ train:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
   - source activate tagger
-  - ./run_training.sh $RERUN_ON_TAG
-  - cd output/baseline
-  - eos mkdir ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model
-  - eos cp model/saved_model.h5 ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model/saved_model.h5 .
-  - export MODEL_LOCATION=${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model
+  - ./CI/run_training.sh $RERUN_ON_TAG
   artifacts:
     paths:
       - output
@@ -150,9 +146,6 @@ hls4ml:
   needs: [train]
   script:
   - source activate tagger
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
   - python tagger/firmware/hls4ml_convert.py
   artifacts:
     paths:
@@ -189,9 +182,6 @@ emulation-evaluate:
   - cd data
   - cp ../${CMSSW_VERSION}/src/FastPUPPI/NtupleProducer/python/jetTuple_extended_5.root .
   - cd ..
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
   - source activate tagger
   - python tagger/plot/makeEmulationPlot.py -r True
   artifacts:
@@ -214,9 +204,6 @@ profile:
   - cd data
   - cp ../${CMSSW_VERSION}/src/FastPUPPI/NtupleProducer/python/jetTuple_extended_5.root .
   - cd ..
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
   - pip uninstall hls4ml -y
   - git clone https://github.com/CMS-L1T-Jet-Tagging/hls4ml.git -b jet_tagger
   - cd hls4ml
