@@ -199,7 +199,9 @@ synth:
     - fpga-large
   image: registry.cern.ch/ci4fpga/vivado:2023.2
   stage: synth
-  needs: [hls4ml]
+  needs: 
+    - job: hls4ml
+      optional: true
   script:
     - cd tagger/firmware/L1TSC4NGJetModel
     - vitis_hls -f build_prj.tcl
@@ -224,7 +226,9 @@ emulation-evaluate:
     - job: train_basic_plots
       optional: true
     - job: emulate
+      optional: true
     - job: hls4ml
+      optional: true
   script:
   - mkdir data
   - cd data
@@ -254,7 +258,9 @@ profile:
     - job: train_basic_plots
       optional: true
     - job: emulate
+      optional: true
     - job: hls4ml
+      optional: true
   script:
   - source activate tagger
   - mkdir data
@@ -287,9 +293,13 @@ upload_new_model:
     - job: train
       optional: true
     - job: hls4ml
+      optional: true
     - job: emulation-evaluate
+      optional: true
     - job: evaluate
+      optional: true
     - job: profile
+      optional: true
   rules:
     - if: $RERUN_ON_TAG == "False"
   before_script:
@@ -344,10 +354,15 @@ upload_tagged_model:
     - job: train_basic_plots
       optional: true
     - job: emulate
+      optional: true
     - job: hls4ml
+      optional: true
     - job: emulation-evaluate
+      optional: true
     - job: evaluate
+      optional: true
     - job: profile
+      optional: true
   rules:
     - if: $RERUN_ON_TAG == "True"
   before_script:
