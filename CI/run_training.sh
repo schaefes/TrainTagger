@@ -13,6 +13,8 @@ else
     eos cp ${MODEL_LOCATION}/saved_model.h5 model
     eos cp ${MODEL_LOCATION}/extras/* .
     cd ../..
+    ls
+    pwd
     python tagger/train/train.py --plot-basic -n $Name
 fi 
 
