@@ -75,15 +75,7 @@ train:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
   - source activate tagger
-<<<<<<< HEAD
   - ./CI/run_training.sh $RERUN_ON_TAG
-=======
-  - ./run_training.sh $RERUN_ON_TAG
-  - cd output/baseline
-  - eos mkdir ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model
-  - eos cp model/saved_model.h5 ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model/saved_model.h5 .
-  - export MODEL_LOCATION=${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model
->>>>>>> e03911c (Update ml_pipeline.yml to use train script)
   artifacts:
     paths:
       - output
@@ -151,9 +143,6 @@ hls4ml:
   needs: [train]
   script:
   - source activate tagger
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
   - python tagger/firmware/hls4ml_convert.py
   artifacts:
     paths:
@@ -190,9 +179,6 @@ emulation-evaluate:
   - cd data
   - cp ../${CMSSW_VERSION}/src/FastPUPPI/NtupleProducer/python/jetTuple_${TRACK_ALGO}_${N_PARAMS}.root .
   - cd ..
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
   - source activate tagger
   - python tagger/plot/makeEmulationPlot.py -r True -i data/jetTuple_${TRACK_ALGO}_${N_PARAMS}.root
   artifacts:
@@ -215,9 +201,6 @@ profile:
   - cd data
   - cp ../${CMSSW_VERSION}/src/FastPUPPI/NtupleProducer/python/jetTuple_${TRACK_ALGO}_${N_PARAMS}.root .
   - cd ..
-  - cd output/baseline/model
-  - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-  - cd ../../..
   - pip uninstall hls4ml -y
   - git clone https://github.com/CMS-L1T-Jet-Tagging/hls4ml.git -b jet_tagger
   - cd hls4ml
@@ -237,11 +220,7 @@ upload_new_model:
   variables:
     KUBERNETES_MEMORY_REQUEST: 4Gi
     KUBERNETES_CPU_REQUEST: 1
-<<<<<<< HEAD
-  needs: [emulation-evaluate,hls4ml,train,evaluate,profile]
-=======
   needs: [train,hls4ml,emulation-evaluate,evaluate,profile]
->>>>>>> e03911c (Update ml_pipeline.yml to use train script)
   rules:
     - if: $RERUN_ON_TAG == "False"
   before_script:
@@ -319,11 +298,7 @@ upload_tagged_model:
     - pb_copy_index.py TrainTagger/${Name} --recursive
     - pb_copy_index.py ${EOS_STORAGE_DIR}/tags/${TAG}/test --recursive
     - cd TrainTagger/${Name} 
-<<<<<<< HEAD
     - pb_deploy_plots.py plots ${EOS_STORAGE_DIR}/tags/${TAG}/test/plots --recursive --extensions png,pdf
-=======
-    - pb_deploy_plots.py plots ${EOS_STORAGE_DIR}/tags/${TAG}/test/ --recursive --extensions png,pdf
->>>>>>> e03911c (Update ml_pipeline.yml to use train script)
   artifacts:
     paths:
       - $Name
