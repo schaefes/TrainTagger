@@ -193,7 +193,6 @@ emulation-evaluate:
   needs: 
     - job: emulate,train,hls4ml
       optional : true
-  dependencies: [emulate,train,hls4ml]
   script:
   - mkdir data
   - cd data
@@ -220,7 +219,6 @@ profile:
   needs: 
     - job: emulate,train,hls4ml
       optional : true
-  dependencies: [emulate,synth,train]
   script:
   - source activate tagger
   - mkdir data
@@ -252,7 +250,6 @@ upload:
   needs:
     job: emulation-evaluate,hls4ml,train,evaluate,profile
     optional : true
-  dependencies: [emulation-evaluate,hls4ml,train,evaluate,profile]
   before_script:
     - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
