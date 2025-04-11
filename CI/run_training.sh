@@ -9,7 +9,9 @@ if [[ "$1" == "False" ]]; then
     export MODEL_LOCATION=${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model
 else
     cd output/baseline
-    eos cp ${MODEL_LOCATION}/saved_model.h5 .
+    mkdir model
+    eos cp ${MODEL_LOCATION}/saved_model.h5 model
+    eos cp ${MODEL_LOCATION}/extras/* .
     python tagger/train/train.py --plot-basic -n $Name
 fi 
 
