@@ -168,7 +168,9 @@ synth:
     - fpga-large
   image: registry.cern.ch/ci4fpga/vivado:2023.2
   stage: synth
-  needs : [hls4ml]
+    needs: 
+    - job : hls4ml
+      optional: true
   script:
     - cd tagger/firmware/L1TSC4NGJetModel
     - vitis_hls -f build_prj.tcl
