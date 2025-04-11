@@ -23,8 +23,16 @@ variables:
     EOS_STORAGE_SUBDIR: branches/${CI_COMMIT_REF_SLUG}/pipeline${CI_PIPELINE_ID}
     EOS_STORAGE_DATADIR: branches/${CI_COMMIT_REF_SLUG}/${Name}/TrainingFiles
     SCRAM_ARCH: 'el9_amd64_gcc12'
+<<<<<<< HEAD
     CMSSW_VERSION: 'CMSSW_15_1_0_pre1'
     CMSSW_L1CT: 'CMS-L1T-Jet-Tagging:15_1_pre1_L1TSC4NGJetTagger'
+=======
+    CMSSW_VERSION: 'CMSSW_14_2_0_pre2'
+    CMSSW_L1CT: 'CMS-L1T-Jet-Tagging:14_2_pre2_L1TSC4NGJetTagger'
+    MODEL_LOCATION: ${EOS_STORAGE_DIR}/tags/${TAG}/model
+    RERUN_ON_TAG: True 
+    TAG: v0.0.0
+>>>>>>> 313aace (Update ml_pipeline.yml to have tag flag)
 
 .template:
   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
@@ -72,9 +80,7 @@ train:
     - job : data
       optional: true
   rules:
-    - changes:  # Include the job if any of the follow paths match a modified file.
-        - tagger/train/**
-        - tagger/data/**
+    - if: $RERUN_ON_TAG == "False"
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
@@ -246,7 +252,10 @@ upload_new_model:
   needs:
     job: emulation-evaluate,hls4ml,train,evaluate,profile
     optional : true
+<<<<<<< HEAD
   dependencies: [emulation-evaluate,hls4ml,train,evaluate,profile]
+=======
+>>>>>>> 313aace (Update ml_pipeline.yml to have tag flag)
   rules:
     - if: $RERUN_ON_TAG == "False"
   before_script:
@@ -260,9 +269,6 @@ upload_new_model:
     - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
     - cp -r L1TSC4NGJetModel.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
     - cd ../..
-    - cd output/baseline/model
-    - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-    - cd ../../..
     - mkdir $Name/plots
     - cp -r output/baseline/model $Name/model
     - mv output/baseline/plots/emulation $Name/plots
