@@ -12,6 +12,7 @@ else
     mkdir model
     eos cp ${MODEL_LOCATION}/saved_model.h5 model
     eos cp ${MODEL_LOCATION}/extras/* .
+    cd ../..
     python tagger/train/train.py --plot-basic -n $Name
 fi 
 
