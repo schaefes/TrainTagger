@@ -11,6 +11,7 @@ else
     cd output/baseline
     eos cp ${MODEL_LOCATION}/saved_model.h5 .
     python tagger/train/train.py --plot-basic -n $Name
+fi 
 
 
 
