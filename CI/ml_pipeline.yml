@@ -75,9 +75,7 @@ train:
     - job : data
       optional: true
   rules:
-    - changes:  # Include the job if any of the follow paths match a modified file.
-        - tagger/train/**
-        - tagger/data/**
+    - if: $RERUN_ON_TAG == "False"
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
@@ -251,7 +249,6 @@ upload_new_model:
   needs:
     job: emulation-evaluate,hls4ml,train,evaluate,profile
     optional : true
-  dependencies: [emulation-evaluate,hls4ml,train,evaluate,profile]
   rules:
     - if: $RERUN_ON_TAG == "False"
   before_script:
@@ -265,9 +262,6 @@ upload_new_model:
     - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
     - cp -r L1TSC4NGJetModel.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
     - cd ../..
-    - cd output/baseline/model
-    - eos cp ${MODEL_LOCATION}/saved_model.h5 .
-    - cd ../../..
     - mkdir $Name/plots
     - cp -r output/baseline/model $Name/model
     - mv output/baseline/plots/emulation $Name/plots
