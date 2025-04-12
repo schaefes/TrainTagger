@@ -189,10 +189,6 @@ def train(out_dir, percent, model_name):
     model_export.save(export_path)
     print(f"Model saved to {export_path}")
 
-    #Produce some basic plots with the training for diagnostics
-    plot_path = os.path.join(out_dir, "plots/training")
-    os.makedirs(plot_path, exist_ok=True)
-
     #Plot history
     loss_history(plot_path, history)
 
@@ -222,6 +218,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     mlflow.set_experiment(os.getenv('CI_COMMIT_REF_NAME'))
+
+    #create plot folder
+    plot_path = os.path.join(out_dir, "plots/training")
+    os.makedirs(plot_path, exist_ok=True)
 
     #Either make data or start the training
     if args.make_data:
