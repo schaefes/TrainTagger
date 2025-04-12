@@ -220,7 +220,7 @@ if __name__ == "__main__":
     mlflow.set_experiment(os.getenv('CI_COMMIT_REF_NAME'))
 
     #create plot folder
-    plot_path = os.path.join(out_dir, "plots/training")
+    plot_path = os.path.join(args.output, "plots/training")
     os.makedirs(plot_path, exist_ok=True)
 
     #Either make data or start the training
