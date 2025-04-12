@@ -10,7 +10,7 @@ else
     mkdir -p output/baseline/model
     eos cp ${MODEL_LOCATION}/model/saved_model.h5 output/baseline/model
     eos cp ${MODEL_LOCATION}/extras/* output/baseline/
-    eos cp ${MODEL_LOCATION}/testing_data output/baseline/testing_data
+    eos cp ${MODEL_LOCATION}/testing_data/* output/baseline/testing_data
     python tagger/train/train.py --plot-basic -n $Name
 fi 
 
