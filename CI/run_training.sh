@@ -12,6 +12,7 @@ else
     eos cp ${MODEL_LOCATION}/extras/* output/baseline/
     mkdir -p output/baseline/testing_data
     eos cp ${MODEL_LOCATION}/testing_data/* output/baseline/testing_data
+    mkdir -p output/baseline/plots
     python tagger/train/train.py --plot-basic -n $Name
 fi 
 
