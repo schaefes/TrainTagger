@@ -281,7 +281,8 @@ upload_tagged_model:
     - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
   script:
     - source activate tagger
-    - mkdir ${EOS_STORAGE_DIR}/tags/${TAG}/test/
+    - mkdir -p ${EOS_STORAGE_DIR}/tags/${TAG}/test/firmware
+    - mkdir -p ${EOS_STORAGE_DIR}/tags/${TAG}/test/plots
     - mkdir $Name
     - cd tagger/firmware
     - tar -cvf L1TSC4NGJetModel.tgz L1TSC4NGJetModel
@@ -297,9 +298,9 @@ upload_tagged_model:
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.cern.ch/cms-analysis/general/php-plots.git -b feature/update_extension_grouping
     - export PATH="${PATH}:/builds/ml_l1/php-plots/bin" 
     - pb_copy_index.py TrainTagger/${Name} --recursive
-    - pb_copy_index.py ${EOS_STORAGE_DIR} --recursive
+    - pb_copy_index.py ${EOS_STORAGE_DIR}/tags/${TAG}/test --recursive
     - cd TrainTagger/${Name} 
-    - pb_deploy_plots.py plots ${EOS_STORAGE_DIR}/tags/${TAG}/test/ --recursive --extensions png,pdf
+    - pb_deploy_plots.py plots ${EOS_STORAGE_DIR}/tags/${TAG}/test/plots --recursive --extensions png,pdf
   artifacts:
     paths:
       - $Name
