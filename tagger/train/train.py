@@ -214,6 +214,7 @@ if __name__ == "__main__":
 
     #Basic ploting
     parser.add_argument('--plot-basic', action='store_true', help='Plot all the basic performance if set')
+    parser.add_argument('-sig', '--signal-processes', default=[], nargs='*', help='Specify all signal process for individual plotting')
 
     args = parser.parse_args()
 
@@ -225,11 +226,18 @@ if __name__ == "__main__":
 
     #Either make data or start the training
     if args.make_data:
-        make_data(infile=args.input, step_size=args.step, extras=args.extras, ratio=args.ratio, tree=args.tree) #Write to training_data/, can be specified using outdir, but keeping it simple here for now
+        #make_data(infile=args.input, step_size=args.step, extras=args.extras, ratio=args.ratio, tree=args.tree) #Write to training_data/, can be specified using outdir, but keeping it simple here for now
+                # Format all the signal processes used for plotting later
+        for signal_process in args.signal_processes:
+            signal_input = os.path.join(os.path.dirname(args.input), f"{signal_process}.root")
+            signal_output = os.path.join("signal_process_data", signal_process)
+            if not os.path.exists(signal_output):
+                make_data(infile=signal_input, outdir=signal_output, step_size=args.step, extras=args.extras,ratio=args.ratio, tree=args.tree)
+    
     elif args.plot_basic:
         model_dir = args.output
         #All the basic plots!
-        results = basic(model_dir)
+        results = basic(model_dir, args.signal_processes)
         if os.path.isfile("mlflow_run_id.txt"):
             f = open("mlflow_run_id.txt", "r")
             run_id = (f.read())

@@ -27,6 +27,7 @@ DeepSet:new_samples_baseline_5param_extended_trk:
     BBTT: GluGluHHTo2B2Tau_PU200.root
     BBTT_EOS_DIR: /eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125_addGenH/
     VBFHTAUTAU: VBFHToTauTau_PU200.root
+    SIGNAL: TT_PU200
     NTUPLE_TREE: outnano/Jets
     EOS_DATA_DIR: /eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/
     EOS_STORAGE_DIR: /eos/project/c/cms-l1t-jet-tagger/www/${CI_PROJECT_NAME}

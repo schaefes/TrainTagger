@@ -25,6 +25,7 @@ variables:
     SCRAM_ARCH: 'el9_amd64_gcc12'
     CMSSW_VERSION: 'CMSSW_15_1_0_pre1'
     CMSSW_L1CT: 'CMS-L1T-Jet-Tagging:15_1_pre1_L1TSC4NGJetTagger'
+    SIGNAL: TT_PU200
     MODEL_LOCATION: ${EOS_STORAGE_DIR}/tags/${TAG}
     RERUN_ON_TAG: 'True'
     TAG: 'v0.0.0'
@@ -60,12 +61,15 @@ data:
   - cd data
   - export EOS_MGM_URL=root://eoscms.cern.ch
   - eos cp $EOS_DATA_DIR/${TRAIN} .
+  - eos cp $EOS_DATA_DIR/${SIGNAL}.root .
   - cd ..
-  - python tagger/train/train.py --make-data -i data/${TRAIN} --tree $NTUPLE_TREE
-  - tar -cf training_data_$Inputs.tgz training_data
+  - python tagger/train/train.py --make-data -i data/${TRAIN} --tree $NTUPLE_TREE -sig $SIGNAL
+  #- tar -cf training_data_$Inputs.tgz training_data
+  - tar -cf signal_process_data.tgz signal_process_data
   - export EOS_MGM_URL=root://eosproject.cern.ch
   - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}
-  - eos cp training_data_$Inputs.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}
+  #- eos cp training_data_$Inputs.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}
+  - eos cp signal_process_data.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}
 
 train:
   extends:
@@ -76,7 +80,9 @@ train:
       optional: true
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
+  - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/signal_process_data.tgz .
   - tar -xf training_data_$Inputs.tgz
+  - tar -xf signal_process_data.tgz
   - source activate tagger
   - ./CI/run_training.sh $RERUN_ON_TAG
   artifacts:

@@ -17,6 +17,8 @@ from .common import PT_BINS
 from .common import plot_histo
 from scipy.stats import norm
 
+from tagger.data.tools import load_data, to_ML
+
 style.set_style()
 
 ###### DEFINE ALL THE PLOTTING FUNCTIONS HERE!!!! THEY WILL BE CALLED IN basic() function >>>>>>>
@@ -95,7 +97,7 @@ def ROC_taus(y_pred, y_test, class_labels, plot_dir):
     plot_roc(y_true_taus_vs_leptons, y_score_taus_vs_leptons, r'$\tau = \tau_{{h}}^{{+}} + \tau_{{h}}^{{-}}$ vs Leptons (muon, electron)', os.path.join(save_dir, "ROC_taus_vs_leptons"))
 
 
-def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
+def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair , signal_proc=None):
     """
     Generate ROC curves comparing between two specific class labels.
     """
@@ -131,7 +133,7 @@ def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
     ax.grid(True)
     ax.set_ylabel('Mistag Rate')
     ax.set_xlabel('Signal Efficiency')
-    ax.legend(loc='lower right',fontsize=style.SMALL_SIZE+3)
+    ax.legend(loc='lower right',fontsize=style.SMALL_SIZE+3, title=signal_proc)
     ax.set_yscale('log')
     ax.set_ylim([1e-3, 1.1])
 
@@ -500,6 +502,38 @@ def plot_shaply(model, X_test, class_labels, input_vars, plot_dir):
         plt.savefig(plot_dir+"/shap_summary_reg.pdf",bbox_inches='tight')
         plt.savefig(plot_dir+"/shap_summary_reg.png",bbox_inches='tight')
 
+# Helper functions for signal specific plotting
+def filter_process(test_data, process_dir):
+    """
+    Filter jets from specific signal process to create plots for specified signal processes.
+    Comparison done through concatenation of sets to be compared and np unique to check for duplicates.
+    """
+    train, test, class_labels = load_data(os.path.join("signal_process_data", process_dir), percentage=100)[:3]
+    train, test = to_ML(train, class_labels), to_ML(test, class_labels)
+
+    # apply unique to sets to be compared, since there tend to be duplicates
+    process_data = np.unique(np.concatenate((train[0], test[0]), axis=0), axis=0)
+    unique_test_data, indices_unique_test_data = np.unique(test_data, axis=0, return_index=True)
+    comparison_data = np.concatenate((unique_test_data, process_data), axis=0)
+    u, index, counts = np.unique(comparison_data, axis=0, return_index=True, return_counts=True)
+    process_indices = index[counts == 2]
+    filtered_indices = indices_unique_test_data[process_indices]
+
+    return filtered_indices
+
+
+# fancy signal process labels
+def process_labels(process_key):
+    processes = {
+        'TT_PU200': r't$\bar{t}$ (PU200)',
+        'ggHHbbbb_PU200': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$b$\bar{b}$ (PU200)',
+        'VBFHtt_PU200': r'VBF $\rightarrow$ H $\rightarrow$ t$\bar{t}$ (PU200)',
+        'ggHHbbtt_PU200': r'gg $\rightarrow$ HH $\rightarrow$ b$\bar{b}$t$\bar{t}$ (PU200)',
+        'ggHtt_PU200': r'gg $\rightarrow$ HH $\rightarrow$ t$\bar{t}$ (PU200)',
+        }
+
+    return processes[process_key]
+
 # <<<<<<<<<<<<<<<<< end of plotting functions, call basic to plot all of them
 def basic(model_dir):
     """
@@ -531,13 +565,30 @@ def basic(model_dir):
 
     #Plot ROC curves
     ROC_dict = ROC(y_pred, y_test, class_labels, plot_dir,ROC_dict)
-
+    class_pairs = []
     #Generate all possible pairs of classes
     for i in class_labels.keys():
         for j in class_labels.keys():
             if i != j:
                 class_pair = (i,j)
-                ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair)
+                class_pairs.append(class_pair)
+
+        # Make ROC binaries for complete test set and each signal process
+    for i in range(-1, len(signal_dirs), 1):
+        if i == -1:
+            y_p, y_t = y_pred, y_test
+            process_label = None
+            binary_dir = plot_dir
+        else:
+            signal_indices = filter_process(X_test, signal_dirs[i])
+            y_p, y_t = y_pred[signal_indices], y_test[signal_indices]
+            process_label = process_labels(signal_dirs[i])
+            binary_dir = os.path.join(plot_dir, signal_dirs[i])
+
+        for class_pair in class_pairs:
+            ROC_binary(y_p, y_t, class_labels, binary_dir, class_pair, process_label)
+
+        
 
     #ROC for taus versus jets and taus versus leptons
     ROC_taus(y_pred, y_test, class_labels, plot_dir)
