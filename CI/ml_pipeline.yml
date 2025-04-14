@@ -1,15 +1,18 @@
 include:
     - CI/cmssw.yml
+    - template: Code-Quality.gitlab-ci.yml
 
 stages:
   - data
   - train
   - evaluate
+  - hls4ml
   - synth
   - emulate
   - emulation-evaluate
   - profile
   - upload
+  - test
 
 variables:
     Name:  baseline_4_params
@@ -21,8 +24,7 @@ variables:
     EOS_STORAGE_DATADIR: branches/${CI_COMMIT_REF_SLUG}/${Name}/TrainingFiles
     SCRAM_ARCH: 'el9_amd64_gcc12'
     CMSSW_VERSION: 'CMSSW_14_2_0_pre2'
-    CMSSW_L1CT: 'CMS-L1T-Jet-Tagging:P2L1JetTagger_14_2_0_pre2-JetTaggerNN'
-    Signal: "VBFHtt_PU200" # add interessting signal procs here in process_labels() in tagger/plot/basic.py
+    CMSSW_L1CT: 'CMS-L1T-Jet-Tagging:14_2_pre2_L1TSC4NGJetTagger'
 
 .template:
   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
@@ -41,10 +43,14 @@ data:
   extends:
     - .template
   stage: data
-  # rules:
-  #    - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
-  #        - tagger/data/**
-  # when: manual
+  tags: [k8s-gpu]
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 32Gi
+    KUBERNETES_CPU_REQUEST: 2
+  rules:
+    - changes:  # Include the job and set to when:manual if any of the follow paths match a modified file.
+        - tagger/data/**
+      when: manual
   script:
   - source activate tagger
   - mkdir data
@@ -69,14 +75,9 @@ train:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
   - source activate tagger
-  - python tagger/train/train.py -n $Name
-  - python tagger/train/train.py --plot-basic -n $Name -sig $Signal
+  - python tagger/train/train.py -n $Name -p 50
+  - python tagger/train/train.py --plot-basic -n $Name
   - cd output/baseline
-  - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/plots/
-  - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model/
-  - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/testing_data/
-  - eos cp -r plots/training ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/plots/
-  - eos cp model/saved_model.h5 ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model/
   artifacts:
     paths:
       - output
@@ -89,9 +90,11 @@ evaluate:
   extends:
     - .template
   stage: evaluate
-  image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
+  tags: [k8s-gpu]
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 32Gi
+    KUBERNETES_CPU_REQUEST: 2
   needs: [train]
-  dependencies: [train]
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
@@ -99,12 +102,25 @@ evaluate:
   - mkdir data
   - cd data
   - eos cp $EOS_DATA_DIR/$MINBIAS .
-  - eos cp $EOS_DATA_DIR/$BBBB .
+  - eos cp $BBBB_EOS_DIR/$BBBB .
+  - eos cp $BBTT_EOS_DIR/$BBTT .
+  - eos cp $EOS_DATA_DIR/$VBFHTAUTAU .
   - cd ..
+  - echo "bbbb performance"
   - python tagger/plot/bbbb.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
   - python tagger/plot/bbbb.py --eff -s data/$BBBB -n 500000 --tree $NTUPLE_TREE
-  - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/plots/physics
-  - eos cp -r output/baseline/plots/physics ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/plots/physics
+  - echo "bbtt performance"
+  - python tagger/plot/bbtt.py --deriveRate --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
+  - python tagger/plot/bbtt.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
+  - python tagger/plot/bbtt.py --eff -s data/$BBTT -n 500000 --tree $NTUPLE_TREE
+  - echo "VBF tautau performance"
+  - python tagger/plot/diTaus.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
+  - python tagger/plot/diTaus.py --BkgRate --minbias data/$MINBIAS -n 500000 --tree $NTUPLE_TREE
+  - python tagger/plot/diTaus.py --eff --vbf_sample data/$VBFHTAUTAU -n 500000 --tree $NTUPLE_TREE
+  - echo "Topology tautau performance"
+  - python tagger/plot/diTaus_topo.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
+  - python tagger/plot/diTaus_topo.py --BkgRate --minbias data/$MINBIAS -n 500000 --tree $NTUPLE_TREE
+  - python tagger/plot/diTaus_topo.py --eff --vbf_sample data/$VBFHTAUTAU -n 500000 --tree $NTUPLE_TREE
   artifacts:
     paths:
       - output
@@ -113,38 +129,50 @@ evaluate:
       - .npy
     expire_in: 1 day
 
-synth:
+hls4ml:
+  tags: [k8s-gpu]
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 32Gi
+    KUBERNETES_CPU_REQUEST: 4
   extends:
     - .template
-  stage: synth
-  tags:
-    - cb_vivado
-  needs : [train]
-  dependencies : [train]
+  stage: hls4ml
+  needs:
+    - job : train
   script:
-    - source /opt/Xilinx/Vivado/2024.1/settings64.sh
-    - export PATH="/externalopt/modelsim/2019.2/modeltech/bin/:$PATH"
-    - export LD_LIBRARY_PATH=/externalopt/cactus/lib:$LD_LIBRARY_PATH
-    - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
-    - source activate tagger
-    - python tagger/firmware/hls4ml_convert.py -n $Name
-    - tar -cvf JetTaggerNN.tgz tagger/firmware/JetTaggerNN
-    - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
-    - eos cp -r JetTaggerNN.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
+  - source activate tagger
+  - python tagger/firmware/hls4ml_convert.py
   artifacts:
     paths:
       - tagger/firmware
-      - mlflow_run_id.txt
+    expire_in: 1 day
+
+synth:
+  tags:
+    - fpga-large
+  image: registry.cern.ch/ci4fpga/vivado:2023.2
+  stage: synth
+  needs : [hls4ml]
+  script:
+    - cd tagger/firmware/L1TSC4NGJetModel
+    - vitis_hls -f build_prj.tcl
+    - vivado -mode batch -source vivado_synth.tcl
+    - cd ../../..
+  artifacts:
+    paths:
+      - tagger/firmware/L1TSC4NGJetModel
     expire_in: 1 day
 
 emulation-evaluate:
   extends:
     - .template
   stage: emulation-evaluate
-  tags:
-    - cb_vivado
-  needs: [emulate,train,synth]
-  dependencies: [emulate,train,synth]
+  tags: [k8s-gpu]
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 8Gi
+    KUBERNETES_CPU_REQUEST: 2
+  needs: [emulate,train,hls4ml]
+  dependencies: [emulate,train,hls4ml]
   script:
   - mkdir data
   - cd data
@@ -152,7 +180,6 @@ emulation-evaluate:
   - cd ..
   - source activate tagger
   - python tagger/plot/makeEmulationPlot.py -r True
-  - eos cp -r output/baseline/plots/emulation ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/plots/
   artifacts:
     paths:
       - output/baseline
@@ -162,13 +189,13 @@ profile:
   extends:
     - .template
   stage: profile
-  tags:
-    - cb_vivado
-  needs: [emulate,train,synth]
-  dependencies: [emulate,train,synth]
+  tags: [k8s-gpu]
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 8Gi
+    KUBERNETES_CPU_REQUEST: 2
+  needs: [emulate,synth,train]
+  dependencies: [emulate,synth,train]
   script:
-  - source /opt/Xilinx/Vivado/2024.1/settings64.sh
-  - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
   - source activate tagger
   - mkdir data
   - cd data
@@ -179,25 +206,33 @@ profile:
   - cd hls4ml
   - pip install .[profiling]
   - cd ..
-  - python tagger/firmware/hls4ml_profile.py -r True
-  - eos cp -r output/baseline/plots/profile ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/plots/
+  - ls tagger/firmware/L1TSC4NGJetModel/L1TSC4NGJetModel_prj/solution1/syn/report/
+  - python tagger/firmware/hls4ml_profile.py -r True -n $Name
   artifacts:
     paths:
       - output/baseline
     expire_in: 1 day
 
 upload:
-  tags: [k8s-gpu]
   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
   stage: upload
-  needs: [emulation-evaluate,synth,train,evaluate,profile]
-  dependencies: [emulation-evaluate,synth,train,evaluate,profile]
+  tags: [k8s-gpu]
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 4Gi
+    KUBERNETES_CPU_REQUEST: 1
+  needs: [emulation-evaluate,hls4ml,train,evaluate,profile]
+  dependencies: [emulation-evaluate,hls4ml,train,evaluate,profile]
   before_script:
     - export PYTHONPATH=/builds/ml_l1/TrainTagger:$PYTHONPATH
+    - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
   script:
     - source activate tagger
     - mkdir $Name
-    - mv tagger/firmware $Name
+    - cd tagger/firmware
+    - tar -cvf L1TSC4NGJetModel.tgz L1TSC4NGJetModel
+    - eos mkdir -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
+    - cp -r L1TSC4NGJetModel.tgz ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware/
+    - cd ../..
     - mkdir $Name/plots
     - cp -r output/baseline/model $Name/model
     - mv output/baseline/plots/emulation $Name/plots
@@ -208,17 +243,27 @@ upload:
     - rm -rf php-plots
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.cern.ch/cms-analysis/general/php-plots.git -b feature/update_extension_grouping
     - export PATH="${PATH}:/builds/ml_l1/php-plots/bin"
-    - echo "$AUTO_DEVOPS_CERNBOX_PASS" | kinit "$AUTO_DEVOPS_CERNBOX_USER@CERN.CH" > /dev/null
     - pb_copy_index.py TrainTagger/${Name} --recursive
-    - pb_deploy_plots.py TrainTagger/${Name} /eos/project/c/cms-l1t-jet-tagger/www/${CI_PROJECT_NAME}/${EOS_STORAGE_SUBDIR} --recursive --extensions png,pdf,h5
-    - cd TrainTagger
+    - pb_copy_index.py ${EOS_STORAGE_DIR} --recursive
+    - cd TrainTagger/${Name}
+    - pb_deploy_plots.py model ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR} --recursive --extensions h5
+    - pb_deploy_plots.py plots ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR} --recursive --extensions png,pdf
+    - cd ..
     - mv CI/mlflow_logger.py .
     - python mlflow_logger.py -w https://cms-l1t-jet-tagger.web.cern.ch/${CI_PROJECT_NAME}/${EOS_STORAGE_SUBDIR}
       -f ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/firmware
       -m ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/model
       -p ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}/plots
       -n ${Name}
+    - eos rm ${EOS_STORAGE_DIR}/branches/${CI_COMMIT_REF_SLUG}/${Name}/latest || true
+    - eos ln ${EOS_STORAGE_DIR}/branches/${CI_COMMIT_REF_SLUG}/${Name}/latest ${EOS_STORAGE_DIR}/${EOS_STORAGE_SUBDIR}
   artifacts:
     paths:
       - $Name
     expire_in: 1 day
+
+code_quality:
+   tags:
+    - docker-privileged-xl
+   artifacts:
+    paths: [gl-code-quality-report.json]

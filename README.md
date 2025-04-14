@@ -1,7 +1,16 @@
-<img src="https://github.com/user-attachments/assets/9eb9833f-0672-4aa8-a66f-8920393bc8e1" alt="CERN-LOGO" width="102">
-<img src="https://github.com/user-attachments/assets/ccb113aa-2050-4873-982a-e7aaffd5cf60" alt="NextGen" width="113">
-<img src="https://github.com/user-attachments/assets/960d9384-529b-45c3-b965-301820271d65" alt="CMSlogo" width="99"> 
-<img src="https://github.com/user-attachments/assets/00fd895b-dd4a-4f84-91df-42bd229e8506" alt="MIT-social-media-logo-white" width="99">
+<span>
+  <img src="logos/CERN_Logo.png" alt="CERNlogo" width="102">
+</span>
+<span>
+  <img src="logos/NextGen_Logo.png" alt="CMSlogo" width="113">
+</span>
+<span>
+  <img src="logos/CMS_Logo.png" alt="CMSlogo" width="99">
+</span>
+<span>
+  <img src="logos/MIT_Logo.png" alt="MIT-social-media-logo-white" width="99">
+</span>
+
 
 # Training Jet Taggers for CMS Phase 2 L1 Trigger
 
@@ -9,7 +18,7 @@ Documentation for training a L1T Jet Tagging model for CMS Phase-2 L1 upgrades.
 
 To train the jet tagger, there are multiple steps that one need to follow, from creating the raw datasets, preprocessing them, train the model, synthesize it, and make validation plots for different physics seeds. This README describes all the steps in a sequential manner.
 
-The CI in this repository aims at building a pipeline that enables running all of these steps automatically.
+The CI in this repository aims at building a pipeline that enables running all of these steps automatically. The CI artifacts are saved here: https://cms-l1t-jet-tagger.web.cern.ch/
 
 **A summary menu of all the steps is listed below**:
 
@@ -26,12 +35,13 @@ The CI in this repository aims at building a pipeline that enables running all o
 Note that the instructions are assuming that you have access to the appropriate `eos` data spaces. If you are not interested in reading lengthy documentation like me, here is a ultra-short version to get started on running the code (more details in each specific command is provided in each section above, futher help can be found by looking into each script):
 
 ```
+#Everything is done directly under the TrainTagger directory
+
 #Activate the environment
 conda activate tagger
 
 #Run this to add the scripts in this directory to your python path
-export PYTHONPATH=$PYTHONPATH:$PWD
-export CI_COMMIT_REF_NAME=local
+source setup.sh
 
 #Prepare the data
 python tagger/train/train.py --make-data
@@ -42,12 +52,14 @@ python tagger/train/train.py
 #Make some basic validation plots
 python tagger/train/train.py --plot-basic
 
-#Make other plots for bbbb/bbtautau final state for example:
-python tagger/plot/bbbb.py
-python tagger/plot/bbtautau.py
+#Make other plots for bbbb/di-taus final state for example:
+python bbbb.py --deriveWPs
+python bbbb.py --eff
 
-#OR vbf tautau
-python tagger/plot/vbf_tautau.py
+#Or for di-taus
+python tagger/plot/diTaus.py --deriveWPs
+python tagger/plot/diTaus.py --BkgRate
+python tagger/plot/diTaus.py --eff
 
 #Synthesize the model (with wrapper and CMMSSW)
 python tagger/firmware/hls4ml_convert.py
@@ -83,7 +95,7 @@ conda-env create -f environment.yml
 conda activate tagger
 
 #Run this to add the scripts in this directory to your python path
-export PYTHONPATH=$PYTHONPATH:$PWD
+source setup.sh
 ```
 
 
