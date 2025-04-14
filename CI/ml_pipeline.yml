@@ -25,6 +25,8 @@ variables:
     SCRAM_ARCH: 'el9_amd64_gcc12'
     CMSSW_VERSION: 'CMSSW_15_1_0_pre1'
     CMSSW_L1CT: 'CMS-L1T-Jet-Tagging:15_1_pre1_L1TSC4NGJetTagger'
+    RERUN_ON_TAG: 'True'
+    TAG: 'v0.0.0'
 
 .template:
   image: gitlab-registry.cern.ch/ml_l1/ops/docker-images/mamba_jettagger:latest
