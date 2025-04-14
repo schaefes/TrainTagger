@@ -502,6 +502,7 @@ def plot_shaply(model, X_test, class_labels, input_vars, plot_dir):
         plt.savefig(plot_dir+"/shap_summary_reg.pdf",bbox_inches='tight')
         plt.savefig(plot_dir+"/shap_summary_reg.png",bbox_inches='tight')
 
+
 # Helper functions for signal specific plotting
 def filter_process(test_data, process_dir):
     """
@@ -519,7 +520,7 @@ def filter_process(test_data, process_dir):
     process_indices = index[counts == 2]
     filtered_indices = indices_unique_test_data[process_indices]
 
-    return filtered_indices
+    return filtered_indices, train, test
 
 
 # fancy signal process labels
@@ -570,25 +571,31 @@ def basic(model_dir,signal_dirs) :
     for i in class_labels.keys():
         for j in class_labels.keys():
             if i != j:
-                class_pair = (i,j)
+                class_pair = [i,j]
                 class_pairs.append(class_pair)
 
-        # Make ROC binaries for complete test set and each signal process
+    # Make ROC binaries for complete test set and each signal process
     for i in range(-1, len(signal_dirs), 1):
+        sample_plot_dir = os.path.join(model_dir, "plots/physics", f"binary_rocs_{signal_dirs[i]}")
         if i == -1:
             y_p, y_t = y_pred, y_test
             process_label = None
-            binary_dir = plot_dir
         else:
-            signal_indices = filter_process(X_test, signal_dirs[i])
+            signal_indices, sample_train, sample_test = filter_process(X_test, signal_dirs[i])
+            sample_data = np.concatenate((sample_train[0], sample_test[0]), axis=0)
+            sample_labels = np.concatenate((sample_train[1], sample_test[1]), axis=0)
+            sample_preds = model.predict(sample_data)[0]
             y_p, y_t = y_pred[signal_indices], y_test[signal_indices]
             process_label = process_labels(signal_dirs[i])
-            binary_dir = os.path.join(plot_dir, signal_dirs[i])
-
+            os.makedirs(binary_dir, exist_ok=True)
         for class_pair in class_pairs:
+            binary_dir = os.path.join(sample_plot_dir, f"test_set") if i != -1 else plot_dir
             ROC_binary(y_p, y_t, class_labels, binary_dir, class_pair, process_label)
+            if i != -1:
+                binary_dir = os.path.join(sample_plot_dir, "full_sample")
+                ROC_binary(sample_preds, sample_labels, class_labels, binary_dir, class_pair, process_label)
 
-        
+
 
     #ROC for taus versus jets and taus versus leptons
     ROC_taus(y_pred, y_test, class_labels, plot_dir)
