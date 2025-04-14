@@ -131,7 +131,7 @@ def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
     ax.grid(True)
     ax.set_ylabel('Mistag Rate')
     ax.set_xlabel('Signal Efficiency')
-    ax.legend(loc='lower right')
+    ax.legend(loc='lower right',fontsize=style.SMALL_SIZE)
     ax.set_yscale('log')
     ax.set_ylim([1e-3, 1.1])
 
