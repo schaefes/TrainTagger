@@ -88,7 +88,7 @@ def ROC_taus(y_pred, y_test, class_labels, plot_dir):
 
     #Plot taus versus jets ROC
     y_true_taus_vs_jets, y_score_taus_vs_jets = compute_roc_inputs(y_pred, y_test, tau_indices, jet_indices)
-    plot_roc(y_true_taus_vs_jets, y_score_taus_vs_jets, r'$\tau = \tau_{{h}}^{{+}} + \tau_{{h}}^{{-}}$ vs Jets (b, charm, light, gluon)', os.path.join(save_dir, "ROC_taus_vs_jets"))
+    plot_roc(y_true_taus_vs_jets, y_score_taus_vs_jets, r'$\tau = \tau_{{h}}^{{+}} + \tau_{{h}}^{{-}}$ vs Jets (b, c, light, gluon)', os.path.join(save_dir, "ROC_taus_vs_jets"))
 
     #Plot taus versus leptons ROC
     y_true_taus_vs_leptons, y_score_taus_vs_leptons = compute_roc_inputs(y_pred, y_test, tau_indices, lepton_indices)
@@ -131,7 +131,7 @@ def ROC_binary(y_pred, y_test, class_labels, plot_dir, class_pair):
     ax.grid(True)
     ax.set_ylabel('Mistag Rate')
     ax.set_xlabel('Signal Efficiency')
-    ax.legend(loc='lower right',fontsize=style.SMALL_SIZE)
+    ax.legend(loc='lower right',fontsize=style.SMALL_SIZE+3)
     ax.set_yscale('log')
     ax.set_ylim([1e-3, 1.1])
 
