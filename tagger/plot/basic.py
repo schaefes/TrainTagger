@@ -535,7 +535,7 @@ def process_labels(process_key):
     return processes[process_key]
 
 # <<<<<<<<<<<<<<<<< end of plotting functions, call basic to plot all of them
-def basic(model_dir):
+def basic(model_dir,signal_dirs) :
     """
     Plot the basic ROCs for different classes. Does not reflect L1 rate
     Returns a dictionary of ROCs for each class
