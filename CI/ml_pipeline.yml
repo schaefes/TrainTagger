@@ -119,9 +119,9 @@ evaluate:
   - echo "bbtt performance"
   - python tagger/plot/bbtt_bb_only.py --deriveRate --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
   - python tagger/plot/bbtt_bb_only.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
-  # - python tagger/plot/bbtt.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
+  - python tagger/plot/bbtt.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
   - python tagger/plot/bbtt_bb_only.py --eff -s data/$BBTT -n 500000 --tree $NTUPLE_TREE
-  # - python tagger/plot/bbtt.py --eff -s data/$BBTT -n 500000 --tree $NTUPLE_TREE
+  - python tagger/plot/bbtt.py --eff -s data/$BBTT -n 500000 --tree $NTUPLE_TREE
   - echo "VBF tautau performance"
   - python tagger/plot/diTaus.py --deriveWPs --minbias data/$MINBIAS -n 650000 --tree $NTUPLE_TREE
   - python tagger/plot/diTaus.py --BkgRate --minbias data/$MINBIAS -n 500000 --tree $NTUPLE_TREE
@@ -146,7 +146,7 @@ hls4ml:
   extends:
     - .template
   stage: hls4ml
-  needs: 
+  needs:
     - job : train
   script:
   - source activate tagger
@@ -305,10 +305,10 @@ upload_tagged_model:
     - cd ..
     - rm -rf php-plots
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.cern.ch/cms-analysis/general/php-plots.git -b feature/update_extension_grouping
-    - export PATH="${PATH}:/builds/ml_l1/php-plots/bin" 
+    - export PATH="${PATH}:/builds/ml_l1/php-plots/bin"
     - pb_copy_index.py TrainTagger/${Name} --recursive
     - pb_copy_index.py ${EOS_STORAGE_DIR}/tags/${TAG}/test --recursive
-    - cd TrainTagger/${Name} 
+    - cd TrainTagger/${Name}
     - pb_deploy_plots.py plots ${EOS_STORAGE_DIR}/tags/${TAG}/test/plots --recursive --extensions png,pdf
   artifacts:
     paths:
