@@ -298,22 +298,29 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
         for tt in NN_edges[:-1]:
             #Calculate the rate
             counts_raw = RateHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
-            rate_list_raw.append((counts_raw / n_events)*MINBIAS_RATE)
+            rate_raw = (counts_raw / n_events)*MINBIAS_RATE
 
             counts_qg = RateHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
-            rate_list_qg.append((counts_qg / n_events)*MINBIAS_RATE)
+            rate_qg = (counts_qg / n_events)*MINBIAS_RATE
+
+            # skip if rate is too low or too high
+            if (rate_qg > 55 or rate_qg < 10) and (rate_raw > 55 or rate_raw < 10): continue
 
             # get signal efficiencies
             counts_signal_raw = SHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
-            eff_list_raw.append(counts_signal_raw / s_n_events)
 
             counts_signal_qg = SHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+
+            rate_list_raw.append(rate_raw)
+            rate_list_qg.append(rate_qg)
+            eff_list_raw.append(counts_signal_raw / s_n_events)
             eff_list_qg.append(counts_signal_qg / s_n_events)
 
             #Append the results
             ht_list.append(ht_cut)
             bb_list.append(bb)
             tt_list.append(tt)
+
     #Pick target rate and plot it
     pick_and_plot(rate_list_raw, eff_list_raw, ht_list, bb_list, tt_list, ht_cut, 'raw', apply_sel, model_dir, n_entries, rate, tree)
     gc.collect()
