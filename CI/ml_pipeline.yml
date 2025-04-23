@@ -98,10 +98,6 @@ evaluate:
   extends:
     - .template
   stage: evaluate
-  tags: [k8s-gpu]
-  variables:
-    KUBERNETES_MEMORY_REQUEST: 32Gi
-    KUBERNETES_CPU_REQUEST: 2
   needs: [train]
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
@@ -135,9 +131,10 @@ evaluate:
     paths:
       - output
       - mlflow_run_id.txt
+    when: always
     exclude:
       - .npy
-    expire_in: 1 day
+    expire_in: 7 days
 
 hls4ml:
   tags: [k8s-gpu]
