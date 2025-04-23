@@ -648,7 +648,7 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
     ax_main = fig.add_subplot(gs[1, 2])
     model_vs_cmssw_ratio[np.isinf(model_vs_cmssw_ratio)] = np.nan
     divnorm=matplotlib.colors.TwoSlopeNorm(vmin=0., vcenter=1., vmax=5.)
-    im = ax_main.pcolormesh(model_vs_cmssw_ratio.T, norm=divnorm, cmap='coolwarm')
+    im = ax_main.pcolormesh(pt_edges, pt_edges, model_vs_cmssw_ratio.T, norm=divnorm, cmap='coolwarm')
     ax_main.set_xlabel(r"Gen. $p_T^1$ [GeV]")
     ax_main.set_ylabel(r"Gen. $p_T^2$ [GeV]")
 
