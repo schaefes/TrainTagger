@@ -121,7 +121,7 @@ def pick_and_plot(rate_list, signal_eff, ht_list, bb_list, tt_list, ht, score_ty
     Pick the working points and plot
     """
     #plus, minus range
-    RateRange = 0.75
+    RateRange = 0.9
 
     #Find the target rate points, plot them and print out some info as well
     target_rate_idx = find_rate(rate_list, target_rate = target_rate, RateRange=RateRange)
@@ -250,7 +250,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,4) for i in np.arange(0.08, .704, 0.006)]) + [2.0]
+    NN_edges = list([round(i,4) for i in np.arange(0.1, .675, 0.0075)]) + [2.0]
 
     # Signal preds to pick the working point
     s_bscore_sums, s_tscore_sums, s_tau_indices, signal_pt, signal_eta, s_n_events = make_predictions(signal_path, model_dir, n_entries, tree=tree)

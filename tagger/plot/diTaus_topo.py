@@ -26,6 +26,7 @@ from scipy.interpolate import interp1d
 from tagger.data.tools import extract_array, extract_nn_inputs, group_id_values
 from common import MINBIAS_RATE, WPs_CMSSW, find_rate, plot_ratio, delta_r, eta_region_selection, get_bar_patch_data
 from matplotlib.gridspec import GridSpec
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 def calculate_topo_score(tau_plus, tau_minus):
     #2=tau positive, 3=tau_negative
@@ -34,6 +35,31 @@ def calculate_topo_score(tau_plus, tau_minus):
     p_neg = tau_minus[:,0] + tau_minus[:,1]
 
     return np.multiply(p_pos, p_neg)
+
+def apply_mask(arrays, mask):
+    masked_arrays = [array[mask] for array in arrays]
+    return masked_arrays
+
+def to_cartesian(mass, pt, eta, phi):
+    """
+    Convert pt, eta, phi to cartesian coordinates
+    """
+    px = pt * np.cos(phi)
+    py = pt * np.sin(phi)
+    pz = pt * np.sinh(eta)
+    e = np.sqrt(px**2 + py**2 + pz**2 + mass**2)
+    return e, px, py, pz
+
+def invariant_mass(m1, pt1, eta1, phi1, m2, pt2, eta2, phi2):
+    """
+    Calculate the invariant mass of two particles given their pt, eta, and phi
+    """
+    e1, x1, y1, z1 = to_cartesian(m1, pt1, eta1, phi1)
+    e2, x2, y2, z2 = to_cartesian(m2, pt2, eta2, phi2)
+
+    # Calculate the invariant mass
+    mass = (e1 + e2)**2 - (x1 + x2)**2 - (y1 + y2)**2 - (z1 + z2)**2
+    return mass
 
 def group_id_values_topo(event_id, raw_tau_score_sum, *arrays, num_elements = 2):
     '''
@@ -411,6 +437,62 @@ def plot_2D_ratio(ratio, pt_edges, plot_dir, figname="VBF_eff_CMSSW"):
     fig.savefig(f'{plot_dir}/{figname}.pdf', bbox_inches='tight')
     plt.show(block=True)
 
+def plot_eff_tau_topo_mtt(model_selection, cmssw_selection, gen_mtt, plot_dir):
+    #Define the histogram edges
+    mtt_edges = list(np.arange(0,1000,20))
+    mtt_axis = hist.axis.Variable(mtt_edges, name = r"$mtt^{gen}$")
+
+    #Create the histograms
+    all_events = Hist(mtt_axis)
+    cmssw_selected_events = Hist(mtt_axis)
+    model_selected_events = Hist(mtt_axis)
+
+    all_events.fill(gen_mtt)
+    cmssw_selected_events.fill(gen_mtt[cmssw_selection])
+    model_selected_events.fill(gen_mtt[model_selection])
+
+    #Plot the ratio
+    eff_cmssw = plot_ratio(all_events, cmssw_selected_events)
+    eff_model = plot_ratio(all_events, model_selected_events)
+
+    #Get data from handles
+    cmssw_x, cmssw_y, cmssw_err = get_bar_patch_data(eff_cmssw)
+    model_x, model_y, model_err = get_bar_patch_data(eff_model)
+
+    # Plot ht distribution in the background
+    counts, bin_edges = np.histogram(np.clip(gen_mtt, 0, 800), bins=np.arange(0,800,40))
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    bin_width = bin_edges[1] - bin_edges[0]
+    normalized_counts = counts / np.sum(counts)
+
+    #Plot a plot comparing the multiclass with ht only selection
+    fig, ax = plt.subplots(1, 1, figsize=style.FIGURE_SIZE)
+    hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax, fontsize=style.MEDIUM_SIZE-2)
+
+    hep.histplot((normalized_counts, bin_edges), ax=ax, histtype='step', color='grey', label=r"$m_{\tau\tau}^{gen}$")
+    ax.errorbar(cmssw_x, cmssw_y, yerr=cmssw_err, c=style.color_cycle[0], fmt='o', linewidth=3,
+                label=r'CMSSW @ 28 kHz')
+    ax.errorbar(model_x, model_y, yerr=model_err, c=style.color_cycle[1], fmt='o', linewidth=3,
+                label=r'Multiclass @ 28 kHz')
+
+
+    # Common plot settings for second plot
+    ax.hlines(1, 0, 1000, linestyles='dashed', color='black', linewidth=4)
+    ax.grid(True)
+    ax.set_ylim([0., 1.1])
+    ax.set_xlim([0, 1000])
+    ax.set_xlabel(r"$m_{\tau\tau}^{gen}$ [GeV]")
+    ax.set_ylabel(r"$\epsilon$(VBF $\to$ \tau\tau)")
+    ax.legend(loc='upper left')
+
+    # Save second plot
+    save_path = os.path.join(plot_dir, f"tau_topo_eff_mtt")
+    plt.savefig(f'{save_path}.pdf', bbox_inches='tight')
+    plt.savefig(f'{save_path}.png', bbox_inches='tight')
+
+    plt.show(block=False)
+
+    return
 
 def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=100000):
 
@@ -423,17 +505,24 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
     with open(os.path.join(model_dir, "input_vars.json"), "r") as f: input_vars = json.load(f)
     with open(os.path.join(model_dir, "class_label.json"), "r") as f: class_labels = json.load(f)
 
-    raw_event_id = extract_array(signal, 'event', n_entries)
-    raw_jet_pt = extract_array(signal, 'jet_pt', n_entries)
+    # mask non visible gen taus
     raw_jet_genpt = extract_array(signal, 'jet_genmatch_pt', n_entries)
-    raw_jet_eta = extract_array(signal, 'jet_eta_phys', n_entries)
-    raw_jet_phi = extract_array(signal, 'jet_phi_phys', n_entries)
+    pt_mask = (raw_jet_genpt != 0)
 
-    raw_cmssw_tau = extract_array(signal, 'jet_tauscore', n_entries)
-    raw_cmssw_taupt = extract_array(signal, 'jet_taupt', n_entries)
+    raw_jet_genpt = raw_jet_genpt[pt_mask]
+    raw_event_id = extract_array(signal, 'event', n_entries)[pt_mask]
+    raw_jet_pt = extract_array(signal, 'jet_pt', n_entries)[pt_mask]
+    raw_jet_genmass = extract_array(signal, 'jet_genmatch_mass', n_entries)[pt_mask]
+    raw_jet_geneta = extract_array(signal, 'jet_genmatch_eta', n_entries)[pt_mask]
+    raw_jet_genphi = extract_array(signal, 'jet_genmatch_phi', n_entries)[pt_mask]
+    raw_jet_eta = extract_array(signal, 'jet_eta_phys', n_entries)[pt_mask]
+    raw_jet_phi = extract_array(signal, 'jet_phi_phys', n_entries)[pt_mask]
+
+    raw_cmssw_tau = extract_array(signal, 'jet_tauscore', n_entries)[pt_mask]
+    raw_cmssw_taupt = extract_array(signal, 'jet_taupt', n_entries)[pt_mask]
 
     #NN related
-    raw_inputs = np.asarray(extract_nn_inputs(signal, input_vars, n_entries=n_entries))
+    raw_inputs = np.asarray(extract_nn_inputs(signal, input_vars, n_entries=n_entries))[pt_mask]
     raw_pred_score, raw_pt_correction = model.predict(raw_inputs)
 
     #Check if the working point have been derived
@@ -456,11 +545,12 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
     print("Total number of signal events: ", n_events)
 
     #Group these attributes by event id, and filter out groups that don't have at least 2 elements
-    event_id, grouped_arrays  = group_id_values_topo(raw_event_id, raw_tau_score_sum, raw_tau_plus, raw_tau_minus, raw_jet_pt, raw_jet_genpt, raw_pt_correction.flatten(), raw_jet_eta, raw_jet_phi, raw_cmssw_tau, raw_cmssw_taupt, num_elements=2)
+    event_id, grouped_arrays  = group_id_values_topo(raw_event_id, raw_tau_score_sum, raw_tau_plus, raw_tau_minus, raw_jet_pt, raw_jet_genmass, raw_jet_genpt, raw_jet_geneta, raw_jet_genphi, raw_pt_correction.flatten(), raw_jet_eta, raw_jet_phi, raw_cmssw_tau, raw_cmssw_taupt, num_elements=2)
 
     # Extract the grouped arrays
-    tau_plus, tau_minus, jet_pt, jet_genpt, jet_pt_correction, jet_eta, jet_phi, cmssw_tau, cmssw_taupt = grouped_arrays
+    tau_plus, tau_minus, jet_pt, jet_genmass, jet_genpt, jet_geneta, jet_genphi, jet_pt_correction, jet_eta, jet_phi, cmssw_tau, cmssw_taupt = grouped_arrays
     genpt1, genpt2 = np.asarray(jet_genpt[:,0]), np.asarray(jet_genpt[:,1])
+    gen_mtt = invariant_mass(jet_genmass[:,0], jet_genpt[:,0], jet_geneta[:,0], jet_genphi[:,0], jet_genmass[:,1], jet_genpt[:,1], jet_geneta[:,1], jet_genphi[:,1])
 
     #calculate delta_r
     eta1, eta2 = jet_eta[:, 0], jet_eta[:, 1]
@@ -495,7 +585,8 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
     cmssw_tau_min =  np.min(cmssw_tau, axis=1)
 
     #Create histograms to contain the gen pts
-    pt_edges = list(np.arange(0,200,10)) #Make sure to capture everything
+    pt_edges = np.arange(0, 210, 15).tolist()
+    pt_edges = np.concatenate((np.arange(0, 100, 10), np.arange(100, 200, 20)))
 
     all_genpt = Hist(hist.axis.Variable(pt_edges, name="genpt1", label="genpt1"),
                     hist.axis.Variable(pt_edges, name="genpt2", label="genpt2"))
@@ -519,35 +610,28 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
     plot_dir = os.path.join(model_dir, 'plots/physics/tautau_topo')
 
     #Plot them side by side
-    fig_width = 3.5 * style.FIGURE_SIZE[0]
+    fig_width = 2.5 * style.FIGURE_SIZE[0]
     fig_height = style.FIGURE_SIZE[1]
-    fig, axes = plt.subplots(1, 3, figsize=(fig_width, fig_height))
+    fig, axes = plt.subplots(1, 2, figsize=(fig_width, fig_height))
 
     extent = [pt_edges[0], pt_edges[-1], pt_edges[0], pt_edges[-1]]
 
     # Plot first efficiency ratio (e.g., CMSSW efficiency)
-    im0 = axes[0].imshow(cmssw_ratio.T, origin='lower', extent=extent, vmin=0, vmax=0.5, aspect='auto')
+    im0 = axes[0].pcolormesh(pt_edges, pt_edges, cmssw_ratio.T, vmin=0, vmax=0.5)
     axes[0].set_xlabel(r"Gen. $p_T^1$ [GeV]")
     axes[0].set_ylabel(r"Gen. $p_T^2$ [GeV]")
     axes[0].set_title("PuppiTau CMSSW Efficiency", pad=45)
     hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=axes[0], fontsize=style.MEDIUM_SIZE-2)
 
     # Plot second efficiency ratio (e.g., Model efficiency)
-    im1 = axes[1].imshow(model_ratio.T, origin='lower', extent=extent, vmin=0, vmax=0.5, aspect='auto')
+    im1 = axes[1].pcolormesh(pt_edges, pt_edges, model_ratio.T, vmin=0, vmax=0.5)
     axes[1].set_xlabel(r"Gen. $p_T^1$ [GeV]")
     axes[1].set_ylabel(r"Gen. $p_T^2$ [GeV]")
     axes[1].set_title("Jet Tagger Efficiency", pad=45)
     hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=axes[1], fontsize=style.MEDIUM_SIZE-2)
 
-    # Plot third efficiency ratio (e.g., Ratio of CMSSW to Model efficiency)
-    im2 = axes[2].imshow(model_vs_cmssw_ratio.T, origin='lower', extent=extent, vmin=0, vmax=0.5, aspect='auto')
-    axes[2].set_xlabel(r"Gen. $p_T^1$ [GeV]")
-    axes[2].set_ylabel(r"Gen. $p_T^2$ [GeV]")
-    axes[2].set_title("Jet Tagger vs CMSSW Efficiency", pad=45)
-    hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=axes[2], fontsize=style.MEDIUM_SIZE-2)
-
     # Add a common colorbar
-    cbar = fig.colorbar(im2, ax=axes.ravel().tolist())
+    cbar = fig.colorbar(im1, ax=axes.ravel().tolist())
 
     # Save and show the plot
     fig.savefig(f'{plot_dir}/topo_vbf_eff.pdf', bbox_inches='tight')
@@ -556,40 +640,46 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
 
     # Ratio plot model vs CMSSW
     fig_height = style.FIGURE_SIZE[1] * 1.1
-    fig_width = style.FIGURE_SIZE[0] * 1.25
+    fig_width = style.FIGURE_SIZE[0] * 1.35
     fig = plt.figure(figsize=(fig_width, fig_height))
-    gs = GridSpec(2, 2, width_ratios=[4, 1], height_ratios=[1, 4], hspace=0.05, wspace=0.05)
+    gs = GridSpec(2, 4, width_ratios=[0.2, 0.5, 4, 1], height_ratios=[1.05, 4], hspace=0.03, wspace=0.05)
 
     # Main heatmap
-    ax_main = fig.add_subplot(gs[1, 0])
-    im = ax_main.imshow(model_vs_cmssw_ratio.T, origin='lower', extent=extent, vmin=0, vmax=1., aspect='auto')
+    ax_main = fig.add_subplot(gs[1, 2])
+    model_vs_cmssw_ratio[np.isinf(model_vs_cmssw_ratio)] = np.nan
+    divnorm=matplotlib.colors.TwoSlopeNorm(vmin=0., vcenter=1., vmax=5.)
+    im = ax_main.pcolormesh(model_vs_cmssw_ratio.T, norm=divnorm, cmap='coolwarm')
     ax_main.set_xlabel(r"Gen. $p_T^1$ [GeV]")
     ax_main.set_ylabel(r"Gen. $p_T^2$ [GeV]")
 
     # Top histogram
-    ax_top = fig.add_subplot(gs[0, 0], sharex=ax_main)
+    ax_top = fig.add_subplot(gs[0, 2], sharex=ax_main)
     counts_pt1, _ =  np.histogram(genpt1, pt_edges)
     counts_pt1_normalized = counts_pt1 / np.sum(counts_pt1)
     ax_top.bar(pt_edges[:-1], counts_pt1_normalized, width=np.diff(pt_edges), align='edge', color='gray', alpha=0.7)
-    ax_top.set_xlim(0.4)
+    ax_top.set_yticks([0, .15, .3])
     ax_top.tick_params(axis="x", labelbottom=False)
-    ax_top.text(140, 0.28, r"Gen. $p_T^1$ [GeV]", fontsize=style.MEDIUM_SIZE)
     hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax_top, fontsize=style.MEDIUM_SIZE-2)
     ax_top.set_title("Jet Tagger vs CMSSW Ratio", pad=35)
 
     # Right histogram
-    ax_right = fig.add_subplot(gs[1, 1], sharey=ax_main)
+    ax_right = fig.add_subplot(gs[1, 3], sharey=ax_main)
     counts_pt2, _ =  np.histogram(genpt2, pt_edges)
     counts_pt2_normalized = counts_pt2 / np.sum(counts_pt2)
     ax_right.barh(pt_edges[:-1], counts_pt2_normalized, height=np.diff(pt_edges), align='edge', color='gray', alpha=0.7)
-    ax_right.text(0.28, 140, r"Gen. $p_T^2$ [GeV]", fontsize=style.MEDIUM_SIZE, rotation=270)
+    ax_right.set_xticks([0, .15, .3])
     ax_right.tick_params(axis="y", labelleft=False)
 
     # Add a common colorbar
-    cbar = fig.colorbar(im, ax=[ax_main, ax_top, ax_right], orientation='vertical', pad=0.02)
+    ax_bar = fig.add_subplot(gs[1, 0])
 
+    # Adjust the colorbar to match the height of the heatmap
+    fig.colorbar(im, cax=ax_bar, aspect=10)
     fig.savefig(f'{plot_dir}/topo_vbf_eff_model_cmssw_ratio.pdf', bbox_inches='tight')
     fig.savefig(f'{plot_dir}/topo_vbf_eff_model_cmssw_ratio.png', bbox_inches='tight')
+
+    # Plot the efficiency vs mtt
+    plot_eff_tau_topo_mtt(model_selection, cmssw_selection, gen_mtt, plot_dir)
 
     return
 
@@ -600,9 +690,8 @@ if __name__ == "__main__":
     1. Derive working points: python diTaus.py --deriveWPs
     2. Run efficiency based on the derived working points: python diTaus.py --eff
     """
-
     parser = ArgumentParser()
-    parser.add_argument('-m','--model_dir', default='output/baseline', help = 'Input model')
+    parser.add_argument('-m','--model_dir', default='/eos/user/s/stella/TrainTagger/output/baseline', help = 'Input model')
     parser.add_argument('-v', '--vbf_sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_5param_221124/VBFHtt_PU200.root' , help = 'Signal sample for VBF -> ditaus')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_5param_221124/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
 
