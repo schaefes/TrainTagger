@@ -472,7 +472,6 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
     # Extract the grouped arrays
     tau_plus, tau_minus, jet_pt, jet_genmass, jet_genpt, jet_geneta, jet_genphi, jet_pt_correction, jet_eta, jet_phi, cmssw_tau, cmssw_taupt = grouped_arrays
     genpt1, genpt2 = np.asarray(jet_genpt[:,0]), np.asarray(jet_genpt[:,1])
-    gen_mtt = invariant_mass(jet_genmass[:,0], jet_genpt[:,0], jet_geneta[:,0], jet_genphi[:,0], jet_genmass[:,1], jet_genpt[:,1], jet_geneta[:,1], jet_genphi[:,1])
 
     #calculate delta_r
     eta1, eta2 = jet_eta[:, 0], jet_eta[:, 1]
