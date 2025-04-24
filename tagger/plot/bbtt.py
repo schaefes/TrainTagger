@@ -116,7 +116,7 @@ def nn_score_sums(model, jet_nn_inputs, class_labels, n_jets=4):
 
     return bscore_sums, tscore_sums, tau_indices
 
-def pick_and_plot(rate_list, signal_eff, ht_list, bb_list, tt_list, ht, score_type, apply_sel, model_dir, n_entries, target_rate, tree):
+def pick_and_plot(rate_list, signal_eff, ht_list, bb_list, tt_list, ht, score_type, apply_sel, model_dir, n_entries, rate, tree):
     """
     Pick the working points and plot
     """
@@ -124,7 +124,7 @@ def pick_and_plot(rate_list, signal_eff, ht_list, bb_list, tt_list, ht, score_ty
     RateRange = 0.9
 
     #Find the target rate points, plot them and print out some info as well
-    target_rate_idx = find_rate(rate_list, target_rate = target_rate, RateRange=RateRange)
+    target_rate_idx = find_rate(rate_list, target_rate = rate, RateRange=RateRange)
 
     #Get the coordinates at target rate and ht
     target_bb = np.array([bb_list[i] for i in target_rate_idx])
