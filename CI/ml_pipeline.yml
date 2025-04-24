@@ -75,7 +75,7 @@ train:
   extends:
     - .template
   stage: train
-  #tags: [cern-nextgen-h100]
+  tags: [cern-nextgen-h100]
   needs:
     - job : data
       optional: true
@@ -98,6 +98,7 @@ evaluate:
   extends:
     - .template
   stage: evaluate
+  tags: [cern-nextgen-h100]
   needs: [train]
   script:
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
