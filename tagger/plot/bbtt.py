@@ -74,8 +74,8 @@ def max_tau_sum(taup_preds, taum_preds):
     tau_scores1[taup_argsort[:,0] == taum_argsort[:,0]] = ak.max(alt_scores, axis=1)[taup_argsort[:,0] == taum_argsort[:,0]]
     tau_idxs = np.stack((taup_argsort[:,0], taum_argsort[:,0]), axis=-1)
     tau_idxs[taup_argsort[:,0] == taum_argsort[:,0]] =  tau_alt_idxs[taup_argsort[:,0] == taum_argsort[:,0]]
-    taup_sum = taup_preds[rows, tau_idxs[:,0]] + taum_preds[rows, tau_idxs[:,1]]
-    taum_sum = taup_preds[rows, tau_idxs[:,1]] + taum_preds[rows, tau_idxs[:,0]]
+    taup_sum = np.sum(taup_preds[rows,tau_idxs], axis=1)
+    taum_sum = np.sum(taum_preds[rows,tau_idxs], axis=1)
     tau_scores2 = np.multiply(taup_sum, taum_sum)
 
     return tau_scores2, tau_idxs
