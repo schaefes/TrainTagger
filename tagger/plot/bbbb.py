@@ -321,11 +321,11 @@ def bbbb_eff(model_dir, signal_path, apply_sel, apply_light, n_entries=100000, t
         b_index=class_labels['b'], l_index=class_labels['light'], g_index=class_labels['gluon'])
 
     cmssw_selection = (jet_ht > cmssw_btag_ht) & (cmsssw_bscore_sum > cmssw_btag)
-    cmssw_efficiency = ak.sum(cmssw_selection) / n_events
+    cmssw_efficiency = np.round(ak.sum(cmssw_selection) / n_events, 2)
     model_selection = (jet_ht > btag_ht_wp) & (model_bscore_sum > btag_wp) & default_selection(jet_pt, jet_eta, apply_sel)
-    model_efficiency = ak.sum(model_selection) / n_events
+    model_efficiency = np.round(ak.sum(model_selection) / n_events, 2)
     ht_only_selection = jet_ht > ht_only_wp
-    ht_only_efficiency = ak.sum(ht_only_selection) / n_events
+    ht_only_efficiency = np.round(ak.sum(ht_only_selection) / n_events, 2)
 
     #Plot the efficiencies w.r.t mHH, only if genHH_mass exists
     if all_event_gen_mHH is not None and event_gen_mHH is not None:
@@ -434,9 +434,9 @@ def bbbb_eff_mHH(model_dir,
     mHH_axis = hist.axis.Variable(mHH_edges, name = r"$HT^{gen}$")
 
     # Efficiencies
-    cmssw_efficiency = ak.sum(cmssw_selection) / n_events
-    model_efficiency = ak.sum(model_selection) / n_events
-    ht_only_efficiency = ak.sum(ht_only_selection) / n_events
+    cmssw_efficiency = np.round(ak.sum(cmssw_selection) / n_events, 2)
+    model_efficiency = np.round(ak.sum(model_selection) / n_events, 2)
+    ht_only_efficiency = np.round(ak.sum(ht_only_selection) / n_events, 2)
 
     #Create the histograms
     all_events = Hist(mHH_axis)

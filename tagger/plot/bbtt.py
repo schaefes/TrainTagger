@@ -250,7 +250,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,4) for i in np.arange(0.005, .4, 0.005)]) + [2.0]
+    NN_edges = list([round(i,4) for i in np.arange(0.01, .3, 0.0025)]) + [2.0]
 
     # Signal preds to pick the working point
     s_bscore_sums, s_tscore_sums, s_tau_indices, signal_pt, signal_eta, s_n_events = make_predictions(signal_path, model_dir, n_entries, tree=tree)
@@ -293,6 +293,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
     bb_list = []
     tt_list = []
 
+    from IPython import embed; embed()
     #Loop through the edges and integrate
     for bb in NN_edges[:-1]:
         for tt in NN_edges[:-1]:
@@ -400,7 +401,7 @@ def bbtt_eff_HT(model_dir, signal_path, score_type, apply_sel, n_entries=100000,
 
     # Result from the baseline selection, multiclass tagger and ht only working point
     baseline_selection, _ = bbtt_seed(jet_pt, tau_pt)
-    baseline_efficiency = np.sum(baseline_selection) / n_events
+    baseline_efficiency = np.round(np.sum(baseline_selection) / n_events, 2)
     model_bscore_sums, model_tscore_sums, tau_indices = nn_score_sums(model, jet_nn_inputs, class_labels)
 
     # use either raw or vs light scores
@@ -414,11 +415,11 @@ def bbtt_eff_HT(model_dir, signal_path, score_type, apply_sel, n_entries=100000,
         default_sel = default_selection(jet_pt, jet_eta, tau_indices[1], apply_sel)
 
     model_selection = (jet_ht > ht_wp) & (model_bscore_sum > btag_wp) & (model_tscore_sum > ttag_wp) & default_sel
-    model_efficiency = np.sum(model_selection) / n_events
+    model_efficiency = np.round(np.sum(model_selection) / n_events, 2)
     model_selection_14 = (jet_ht > ht_wp_14) & (model_bscore_sum > btag_wp_14) & (model_tscore_sum > ttag_wp_14) & default_sel
-    model_14_efficiency = np.sum(model_selection_14) / n_events
+    model_14_efficiency = np.round(np.sum(model_selection_14) / n_events, 2)
     ht_only_selection = jet_ht > ht_only_wp
-    ht_only_efficiency = np.sum(ht_only_selection) / n_events
+    ht_only_efficiency = np.round(np.sum(ht_only_selection) / n_events, 2)
 
     #PLot the efficiencies
     #Basically we want to bin the selected truth ht and divide it by the overall count
