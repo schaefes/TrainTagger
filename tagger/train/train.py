@@ -229,7 +229,6 @@ if __name__ == "__main__":
         make_data(infile=args.input, step_size=args.step, extras=args.extras, ratio=args.ratio, tree=args.tree) #Write to training_data/, can be specified using outdir, but keeping it simple here for now
         # Format all the signal processes used for plotting later
         for signal_process in args.signal_processes:
-            from IPython import embed; embed()
             signal_input = os.path.join(os.path.dirname(args.input), f"{signal_process}.root")
             signal_output = os.path.join("signal_process_data", signal_process)
             if not os.path.exists(signal_output):
