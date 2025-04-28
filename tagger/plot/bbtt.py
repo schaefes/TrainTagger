@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import mplhep as hep
 import tagger.plot.style as style
+from joblib import Parallel, delayed
 
 style.set_style()
 
@@ -209,7 +210,6 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
     """
     Derive the HH->4b working points
     """
-    from IPython import embed; embed()
     model = load_qmodel(os.path.join(model_dir, "model/saved_model.h5"))
 
     with open(os.path.join(model_dir, f"plots/physics/bbtt/bbtt_seed_rate.json"), "r") as f: rate = json.load(f)
