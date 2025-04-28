@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import mplhep as hep
 import tagger.plot.style as style
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, parallel_backend
 
 style.set_style()
 
@@ -250,7 +250,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,4) for i in np.arange(0.01, .3, 0.0025)]) + [2.0]
+    NN_edges = list([round(i,4) for i in np.arange(0.01, .35, 0.0025)]) + [2.0]
 
     # Signal preds to pick the working point
     s_bscore_sums, s_tscore_sums, s_tau_indices, signal_pt, signal_eta, s_n_events = make_predictions(signal_path, model_dir, n_entries, tree=tree)
@@ -293,33 +293,39 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
     bb_list = []
     tt_list = []
 
-    #Loop through the edges and integrate
-    for bb in NN_edges[:-1]:
-        for tt in NN_edges[:-1]:
-            #Calculate the rate
-            counts_raw = RateHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
-            rate_raw = (counts_raw / n_events)*MINBIAS_RATE
+    # Parallelized loop through the edges and integrate
+    def parallel_in_parallel(tt, bb):
+        #Calculate the rate
+        counts_raw = RateHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        rate_raw = (counts_raw / n_events)*MINBIAS_RATE
 
-            counts_qg = RateHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
-            rate_qg = (counts_qg / n_events)*MINBIAS_RATE
+        counts_qg = RateHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        rate_qg = (counts_qg / n_events)*MINBIAS_RATE
 
-            # skip if rate is too low or too high
-            if (rate_qg > 55 or rate_qg < 10) and (rate_raw > 55 or rate_raw < 10): continue
+        # check if the rate is in the range, skip if not
+        if (rate_qg > 55 or rate_qg < 10) and (rate_raw > 55 or rate_raw < 10): return
 
-            # get signal efficiencies
-            counts_signal_raw = SHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        # get signal efficiencies
+        counts_signal_raw = SHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
 
-            counts_signal_qg = SHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        counts_signal_qg = SHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
 
-            rate_list_raw.append(rate_raw)
-            rate_list_qg.append(rate_qg)
-            eff_list_raw.append(counts_signal_raw / s_n_events)
-            eff_list_qg.append(counts_signal_qg / s_n_events)
+        rate_list_raw.append(rate_raw)
+        rate_list_qg.append(rate_qg)
+        eff_list_raw.append(counts_signal_raw / s_n_events)
+        eff_list_qg.append(counts_signal_qg / s_n_events)
+        ht_list.append(ht_cut)
+        bb_list.append(bb)
+        tt_list.append(tt)
 
-            #Append the results
-            ht_list.append(ht_cut)
-            bb_list.append(bb)
-            tt_list.append(tt)
+        return
+
+    def parallel_in_parallel_wrapper(bb, n_threads=7):
+        with parallel_backend('loky', inner_max_num_threads=n_threads):
+            Parallel(n_jobs=n_threads)(delayed(parallel_in_parallel)(tt=tt, bb=bb) for tt in NN_edges[:-1])
+        return
+
+    Parallel(n_jobs=7)(delayed(parallel_in_parallel_wrapper)(bb) for bb in NN_edges[:-1])
 
     #Pick target rate and plot it
     pick_and_plot(rate_list_raw, eff_list_raw, ht_list, bb_list, tt_list, ht_cut, 'raw', apply_sel, model_dir, n_entries, rate, tree)
