@@ -140,7 +140,7 @@ def pick_and_plot(rate_list, signal_eff, ht_list, bb_list, tt_list, ht, score_ty
         "TT": float(target_tt[wp_ht_eff_idx])}
 
     # save WPs
-    plot_dir = os.path.join(model_dir, 'plots/physics/bbtt2')
+    plot_dir = os.path.join(model_dir, 'plots/physics/bbtt')
     os.makedirs(plot_dir, exist_ok=True)
     with open(os.path.join(plot_dir, f"bbtt_fixed_wp_{score_type}_{apply_sel}_{rate}.json"), "w") as f:
         json.dump(fixed_ht_wp, f, indent=4)
@@ -250,7 +250,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,4) for i in np.arange(0.01, .35, 0.0025)]) + [2.0]
+    NN_edges = list([round(i,4) for i in np.arange(0.01, .5, 0.0025)]) + [2.0]
 
     # Signal preds to pick the working point
     s_bscore_sums, s_tscore_sums, s_tau_indices, signal_pt, signal_eta, s_n_events = make_predictions(signal_path, model_dir, n_entries, tree=tree)
@@ -287,45 +287,59 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
     SHistQG.fill(ht = signal_ht[s_def_sels[1]], nn_bb = s_bscore_sums[1], nn_tt = s_tscore_sums[1])
 
     #Derive the rate
-    rate_list_raw, rate_list_qg = [], []
-    eff_list_raw, eff_list_qg = [], []
-    ht_list = []
-    bb_list = []
-    tt_list = []
 
     # Parallelized loop through the edges and integrate
-    def parallel_in_parallel(tt, bb):
+    def parallel_in_parallel(bb):
+        rate_list_raw, rate_list_qg = [], []
+        eff_list_raw, eff_list_qg = [], []
+        ht_list = []
+        bb_list = []
+        tt_list = []
+
         #Calculate the rate
-        counts_raw = RateHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
-        rate_raw = (counts_raw / n_events)*MINBIAS_RATE
+        for tt in NN_edges[:-1]:
+            counts_raw = RateHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+            rate_raw = (counts_raw / n_events)*MINBIAS_RATE
 
-        counts_qg = RateHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
-        rate_qg = (counts_qg / n_events)*MINBIAS_RATE
+            counts_qg = RateHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+            rate_qg = (counts_qg / n_events)*MINBIAS_RATE
 
-        # check if the rate is in the range, skip if not
-        if (rate_qg > 55 or rate_qg < 10) and (rate_raw > 55 or rate_raw < 10): return
+            # check if the rate is in the range, skip if not
+            if (rate_qg > 55 or rate_qg < 12) and (rate_raw > 55 or rate_raw < 12): continue
 
-        # get signal efficiencies
-        counts_signal_raw = SHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+            # get signal efficiencies
+            counts_signal_raw = SHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
 
-        counts_signal_qg = SHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+            counts_signal_qg = SHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
 
-        rate_list_raw.append(rate_raw)
-        rate_list_qg.append(rate_qg)
-        eff_list_raw.append(counts_signal_raw / s_n_events)
-        eff_list_qg.append(counts_signal_qg / s_n_events)
-        ht_list.append(ht_cut)
-        bb_list.append(bb)
-        tt_list.append(tt)
+            rate_list_raw.append(rate_raw)
+            rate_list_qg.append(rate_qg)
+            eff_list_raw.append(counts_signal_raw / s_n_events)
+            eff_list_qg.append(counts_signal_qg / s_n_events)
+            ht_list.append(ht_cut)
+            bb_list.append(bb)
+            tt_list.append(tt)
 
-        return
+        #Stack the results
+        stacked_lists = np.stack(
+            (rate_list_raw, rate_list_qg, eff_list_raw, eff_list_qg, ht_list, bb_list, tt_list),
+            axis=-1)
+
+        return stacked_lists
 
     def parallel_in_parallel_wrapper(bb, n_threads=7):
         with parallel_backend('loky', inner_max_num_threads=n_threads):
-            Parallel(n_jobs=n_threads)(delayed(parallel_in_parallel)(tt=tt, bb=bb) for tt in NN_edges[:-1])
+            intermediate_out = Parallel(n_jobs=n_threads)(delayed(parallel_in_parallel)(tt=tt, bb=bb) for tt in NN_edges[:-1])
         return
 
-    Parallel(n_jobs=7)(delayed(parallel_in_parallel_wrapper)(bb) for bb in NN_edges[:-1])
+    #Parallelized the first loop
+    parallel_out = Parallel(n_jobs=-1)(delayed(parallel_in_parallel)(bb) for bb in NN_edges[:-1])
+    np_out = np.concatenate(parallel_out, axis=0)
+
+    # Unpack and convert back to lists
+    rate_list_raw, rate_list_qg = np_out[:,0].tolist(), np_out[:,1].tolist()
+    eff_list_raw, eff_list_qg = np_out[:,2].tolist(), np_out[:,3].tolist()
+    ht_list, bb_list, tt_list = np_out[:,4].tolist(), np_out[:,5].tolist(), np_out[:,6].tolist()
 
     #Pick target rate and plot it
     pick_and_plot(rate_list_raw, eff_list_raw, ht_list, bb_list, tt_list, ht_cut, 'raw', apply_sel, model_dir, n_entries, rate, tree)
@@ -358,9 +372,9 @@ def bbtt_eff_HT(model_dir, signal_path, score_type, apply_sel, n_entries=100000,
     ht_axis = hist.axis.Variable(ht_egdes, name = r"$HT^{gen}$")
 
     #Check if the working point have been derived
-    WP_path = os.path.join(model_dir, f"plots/physics/bbtt2/bbtt_fixed_wp_{score_type}_{apply_sel}_{rate}.json")
-    WP_path_14 = os.path.join(model_dir, f"plots/physics/bbtt2/bbtt_fixed_wp_{score_type}_{apply_sel}_14.json")
-    HT_path = os.path.join(model_dir, "plots/physics/bbtt2/ht_working_point.json")
+    WP_path = os.path.join(model_dir, f"plots/physics/bbtt/bbtt_fixed_wp_{score_type}_{apply_sel}_{rate}.json")
+    WP_path_14 = os.path.join(model_dir, f"plots/physics/bbtt/bbtt_fixed_wp_{score_type}_{apply_sel}_14.json")
+    HT_path = os.path.join(model_dir, "plots/physics/bbtt/ht_working_point.json")
 
     #Get derived working points
     if os.path.exists(WP_path) & os.path.exists(HT_path) & os.path.exists(WP_path_14):
@@ -500,7 +514,7 @@ def bbtt_eff_HT(model_dir, signal_path, score_type, apply_sel, n_entries=100000,
     plt.legend(loc='upper left')
 
     #Save plot
-    plot_path = os.path.join(model_dir, f"plots/physics/bbtt2/HHbbtt_eff_HT_only_{score_type}_{apply_sel}")
+    plot_path = os.path.join(model_dir, f"plots/physics/bbtt/HHbbtt_eff_HT_only_{score_type}_{apply_sel}")
     plt.savefig(f'{plot_path}.pdf', bbox_inches='tight')
     plt.savefig(f'{plot_path}.png', bbox_inches='tight')
     plt.show(block=False)
