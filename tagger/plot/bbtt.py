@@ -122,7 +122,7 @@ def pick_and_plot(rate_list, signal_eff, ht_list, bb_list, tt_list, ht, score_ty
     Pick the working points and plot
     """
     #plus, minus range
-    RateRange = 0.9
+    RateRange = 1.
 
     #Find the target rate points, plot them and print out some info as well
     target_rate_idx = find_rate(rate_list, target_rate = rate, RateRange=RateRange)
@@ -250,7 +250,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,4) for i in np.arange(0.01, .5, 0.0025)]) + [2.0]
+    NN_edges = list([round(i,4) for i in np.arange(0.01, .55, 0.002)]) + [2.0]
 
     # Signal preds to pick the working point
     s_bscore_sums, s_tscore_sums, s_tau_indices, signal_pt, signal_eta, s_n_events = make_predictions(signal_path, model_dir, n_entries, tree=tree)
@@ -286,55 +286,42 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
     SHistRaw.fill(ht = signal_ht[s_def_sels[0]], nn_bb = s_bscore_sums[0], nn_tt = s_tscore_sums[0])
     SHistQG.fill(ht = signal_ht[s_def_sels[1]], nn_bb = s_bscore_sums[1], nn_tt = s_tscore_sums[1])
 
-    #Derive the rate
+    def pick_rates(rate, target_rate=rate):
+        if (rate > 16 and rate < target_rate-2) or rate < 12 or rate > target_rate+2:
+            return True
+        else:
+            return False
 
     # Parallelized loop through the edges and integrate
-    def parallel_in_parallel(bb):
-        rate_list_raw, rate_list_qg = [], []
-        eff_list_raw, eff_list_qg = [], []
-        ht_list = []
-        bb_list = []
-        tt_list = []
-
+    def parallel_in_parallel(tt, bb):
         #Calculate the rate
-        for tt in NN_edges[:-1]:
-            counts_raw = RateHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
-            rate_raw = (counts_raw / n_events)*MINBIAS_RATE
+        counts_raw = RateHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        rate_raw = (counts_raw / n_events)*MINBIAS_RATE
 
-            counts_qg = RateHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
-            rate_qg = (counts_qg / n_events)*MINBIAS_RATE
+        counts_qg = RateHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        rate_qg = (counts_qg / n_events)*MINBIAS_RATE
 
-            # check if the rate is in the range, skip if not
-            if (rate_qg > 55 or rate_qg < 12) and (rate_raw > 55 or rate_raw < 12): continue
+        # check if the rate is in the range, skip if not
+        if pick_rates(rate_raw) and pick_rates(rate_qg): return
 
-            # get signal efficiencies
-            counts_signal_raw = SHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        # get signal efficiencies
+        counts_signal_raw = SHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        eff_signal_raw = counts_signal_raw / s_n_events
 
-            counts_signal_qg = SHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        counts_signal_qg = SHistQG[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
+        eff_signal_qg = counts_signal_qg / s_n_events
 
-            rate_list_raw.append(rate_raw)
-            rate_list_qg.append(rate_qg)
-            eff_list_raw.append(counts_signal_raw / s_n_events)
-            eff_list_qg.append(counts_signal_qg / s_n_events)
-            ht_list.append(ht_cut)
-            bb_list.append(bb)
-            tt_list.append(tt)
+        return np.array([rate_raw, rate_qg, eff_signal_raw, eff_signal_qg, ht_cut, bb, tt])
 
-        #Stack the results
-        stacked_lists = np.stack(
-            (rate_list_raw, rate_list_qg, eff_list_raw, eff_list_qg, ht_list, bb_list, tt_list),
-            axis=-1)
-
-        return stacked_lists
-
-    def parallel_in_parallel_wrapper(bb, n_threads=7):
+    def parallel_in_parallel_wrapper(bb, n_threads=6):
         with parallel_backend('loky', inner_max_num_threads=n_threads):
             intermediate_out = Parallel(n_jobs=n_threads)(delayed(parallel_in_parallel)(tt=tt, bb=bb) for tt in NN_edges[:-1])
-        return
+        return intermediate_out
 
     #Parallelized the first loop
-    parallel_out = Parallel(n_jobs=-1)(delayed(parallel_in_parallel)(bb) for bb in NN_edges[:-1])
-    np_out = np.concatenate(parallel_out, axis=0)
+    parallel_out = Parallel(n_jobs=-1)(delayed(parallel_in_parallel_wrapper)(bb) for bb in NN_edges[:-1])
+    parallel_out = ak.drop_none(parallel_out)
+    np_out = ak.to_numpy(ak.flatten(parallel_out, axis=1))
 
     # Unpack and convert back to lists
     rate_list_raw, rate_list_qg = np_out[:,0].tolist(), np_out[:,1].tolist()
@@ -530,7 +517,7 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument('-m','--model_dir', default='output/baseline', help = 'Input model')
-    parser.add_argument('-s', '--signal', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/GluGluHHTo2B2Tau_PU200.root' , help = 'Signal sample for HH->bbtt')
+    parser.add_argument('-s', '--signal', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125_addGenH/GluGluHHTo2B2Tau_PU200.root' , help = 'Signal sample for HH->bbtt')
     parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
 
     #Different modes
