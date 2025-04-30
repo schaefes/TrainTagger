@@ -252,7 +252,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Define the histograms (pT edge and NN Score edge)
     ht_edges = list(np.arange(150,500,1)) + [10000] #Make sure to capture everything
-    NN_edges = list([round(i,4) for i in np.arange(0.01, .3, 0.005)]) + [2.0]
+    NN_edges = list([round(i,4) for i in np.arange(0.01, .4, 0.0025)]) + [2.0]
 
     # Signal preds to pick the working point
     s_bscore_sums, s_tscore_sums, s_tau_indices, signal_pt, signal_eta, s_n_events = make_predictions(signal_path, model_dir, n_entries, tree=tree)
@@ -296,7 +296,6 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     # Parallelized loop through the edges and integrate
     def parallel_in_parallel(tt, bb):
-        print("bb: ", bb, "tt: ", tt)
         #Calculate the rate
         counts_raw = RateHistRaw[{"ht": slice(ht_cut*1j, None, sum)}][{"nn_bb": slice(bb*1.0j, None, sum)}][{"nn_tt": slice(tt*1.0j, None, sum)}]
         rate_raw = (counts_raw / n_events)*MINBIAS_RATE
@@ -323,7 +322,7 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
     #Parallelized the first loop
     start = time.time()
-    parallel_out = Parallel(n_jobs=4)(delayed(parallel_in_parallel_wrapper)(bb) for bb in tqdm(NN_edges[:-1]))
+    parallel_out = Parallel(n_jobs=3)(delayed(parallel_in_parallel_wrapper)(bb) for bb in tqdm(NN_edges[:-1]))
     parallel_out = ak.drop_none(parallel_out)
     end = time.time()
     print("Time taken for parallel loop: ", end-start)
