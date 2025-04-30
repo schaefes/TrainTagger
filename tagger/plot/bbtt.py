@@ -316,14 +316,14 @@ def derive_bbtt_WPs(model_dir, minbias_path, ht_cut, apply_sel, signal_path, n_e
 
         return np.array([rate_raw, rate_qg, eff_signal_raw, eff_signal_qg, ht_cut, bb, tt])
 
-    def parallel_in_parallel_wrapper(bb, n_threads=1):
+    def parallel_in_parallel_wrapper(bb, n_threads=2):
         with parallel_backend('loky', inner_max_num_threads=n_threads):
             intermediate_out = Parallel(n_jobs=n_threads)(delayed(parallel_in_parallel)(tt=tt, bb=bb) for tt in NN_edges[:-1])
         return intermediate_out
 
     #Parallelized the first loop
     start = time.time()
-    parallel_out = Parallel(n_jobs=1)(delayed(parallel_in_parallel_wrapper)(bb) for bb in tqdm(NN_edges[:-1]))
+    parallel_out = Parallel(n_jobs=4)(delayed(parallel_in_parallel_wrapper)(bb) for bb in tqdm(NN_edges[:-1]))
     parallel_out = ak.drop_none(parallel_out)
     end = time.time()
     print("Time taken for parallel loop: ", end-start)
