@@ -131,25 +131,42 @@ if __name__ == "__main__":
 
     doPlots(model,args.outpath,"profiling_data/")
 
-    f = open("mlflow_run_id.txt", "r")
-    run_id = (f.read())
-    mlflow.get_experiment_by_name(os.getenv('CI_COMMIT_REF_NAME'))
-    with mlflow.start_run(experiment_id=1,
-                        run_name=args.name,
-                        run_id=run_id # pass None to start a new run
-                        ):
-        precisions = convert(model,args.outpath_firmware)
-        report = getReports('tagger/firmware/L1TSC4NGJetModel')
-        mlflow.log_metric('FF',report['ff_rel'])
-        mlflow.log_metric('LUT',report['lut_rel'])
-        mlflow.log_metric('BRAM',report['bram_rel'])
-        mlflow.log_metric('DSP',report['dsp_rel'])
-        mlflow.log_metric('Latency cc',report['latency_clks'])
-        mlflow.log_metric('Latency us',report['latency_mus'])
-        mlflow.log_metric('Initiation Interval ',report['latency_ii'])
-        mlflow.log_metric('Initiation Interval ',report['latency_ii'])
+    precisions = convert(model,args.outpath_firmware)
+    report = getReports('tagger/firmware/L1TSC4NGJetModel')
+    
+    if os.path.isfile(mlflow_run_id.txt):
 
-        mlflow.log_param('Input Precision ',precisions[0])
-        mlflow.log_param('Class Precision ',precisions[1])
-        mlflow.log_param('Regression Precision ',precisions[2])
+        f = open("mlflow_run_id.txt", "r")
+        run_id = (f.read())
+        mlflow.get_experiment_by_name(os.getenv('CI_COMMIT_REF_NAME'))
+        with mlflow.start_run(experiment_id=1,
+                            run_name=args.name,
+                            run_id=run_id # pass None to start a new run
+                            )
+            mlflow.log_metric('FF',report['ff_rel'])
+            mlflow.log_metric('LUT',report['lut_rel'])
+            mlflow.log_metric('BRAM',report['bram_rel'])
+            mlflow.log_metric('DSP',report['dsp_rel'])
+            mlflow.log_metric('Latency cc',report['latency_clks'])
+            mlflow.log_metric('Latency us',report['latency_mus'])
+            mlflow.log_metric('Initiation Interval ',report['latency_ii'])
+    
+            mlflow.log_param('Input Precision ',precisions[0])
+            mlflow.log_param('Class Precision ',precisions[1])
+            mlflow.log_param('Regression Precision ',precisions[2])
+
+    print("===================")
+    print('Input Precision : ',  precisions[0])
+    print('Class Precision : ', precisions[1])
+    print('Regression Precision : ', precisions[2],' %')
+    print(" Resource Usage of a VU13P")
+    print('Flip Flops : ', report['ff_rel'],' %')
+    print('Look Up Tables : ', report['lut_rel'],' %')
+    print('Block RAM : ', report['bram_rel'],' %')
+    print('Digital Signal Processors : ', report['dsp_rel'],' %')
+    print('Latency : ', report['latency_clks'],' clock cycles')
+    print('Latency : ', report['latency_mus'],' mus')
+    print('Initiation Interval : ', report['latency_mus'],' clock cycles')
+    print("===================")
+        
 
