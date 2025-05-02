@@ -100,6 +100,7 @@ evaluate:
   stage: evaluate
   needs: [train]
   script:
+  - nproc
   - eos cp ${EOS_STORAGE_DIR}/${EOS_STORAGE_DATADIR}/training_data_$Inputs.tgz .
   - tar -xf training_data_$Inputs.tgz
   - source activate tagger

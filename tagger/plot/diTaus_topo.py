@@ -563,7 +563,7 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
     fig_height = style.FIGURE_SIZE[1] * 1.1
     fig_width = style.FIGURE_SIZE[0] * 1.4
     fig = plt.figure(figsize=(fig_width, fig_height))
-    gs = GridSpec(2, 5, width_ratios=[0.1, 0.2, 0.5, 4, 1], height_ratios=[1.05, 4], hspace=0.03, wspace=0.05)
+    gs = GridSpec(2, 5, width_ratios=[0.1, 0.2, 0.5, 4, 1], height_ratios=[1.05, 4], hspace=0.05, wspace=0.11)
 
     # Main heatmap
     ax_title = fig.add_subplot(gs[1, 0])
@@ -572,10 +572,11 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
 
     ax_main = fig.add_subplot(gs[1, 3])
     model_vs_cmssw_ratio[np.isinf(model_vs_cmssw_ratio)] = np.nan
-    divnorm=matplotlib.colors.TwoSlopeNorm(vmin=0., vcenter=1., vmax=5.)
+    divnorm = matplotlib.colors.TwoSlopeNorm(vmin=0., vcenter=1., vmax=5.)
     im = ax_main.pcolormesh(pt_edges, pt_edges, model_vs_cmssw_ratio.T, norm=divnorm, cmap='coolwarm')
     ax_main.set_xlabel(r"Gen. $p_T^1$ [GeV]")
     ax_main.set_ylabel(r"Gen. $p_T^2$ [GeV]")
+    ax_main.set_xticks(ax_main.get_xticks()[:-1])
 
     # Top histogram
     ax_top = fig.add_subplot(gs[0, 3], sharex=ax_main)
@@ -584,6 +585,7 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
     ax_top.bar(pt_edges[:-1], counts_pt1_normalized, width=np.diff(pt_edges), align='edge', color='gray', alpha=0.7)
     ax_top.set_yticks([0, .15, .3])
     ax_top.tick_params(axis="x", labelbottom=False)
+    ax_top.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda y, _: '{:.0f}'.format(y) if y.is_integer() else '{:.2f}'.format(y)))
     hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax_top, fontsize=style.MEDIUM_SIZE-2)
 
     # Right histogram
@@ -592,6 +594,7 @@ def topo_eff(model_dir, tau_eff_filepath, tree='jetntuple/Jets', n_entries=10000
     counts_pt2_normalized = counts_pt2 / np.sum(counts_pt2)
     ax_right.barh(pt_edges[:-1], counts_pt2_normalized, height=np.diff(pt_edges), align='edge', color='gray', alpha=0.7)
     ax_right.set_xticks([0, .15, .3])
+    ax_right.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: '{:.0f}'.format(x) if x.is_integer() else '{:.2f}'.format(x)))
     ax_right.tick_params(axis="y", labelleft=False)
 
     # Add colorbar
