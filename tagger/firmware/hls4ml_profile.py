@@ -134,7 +134,7 @@ if __name__ == "__main__":
     precisions = convert(model,args.outpath_firmware)
     report = getReports('tagger/firmware/L1TSC4NGJetModel')
     
-    if os.path.isfile(mlflow_run_id.txt):
+    if os.path.isfile("mlflow_run_id.txt"):
 
         f = open("mlflow_run_id.txt", "r")
         run_id = (f.read())
