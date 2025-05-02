@@ -15,12 +15,4 @@ else
     eos cp ${MODEL_LOCATION}/signal_process_data.tgz .
     tar -xf signal_process_data.tgz
     python tagger/train/train.py --plot-basic -n $Name -sig $SIGNAL
-fi 
-
-
-
-    
-    
-  
-
-  
+fi
