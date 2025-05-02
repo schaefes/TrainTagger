@@ -142,7 +142,7 @@ if __name__ == "__main__":
         with mlflow.start_run(experiment_id=1,
                             run_name=args.name,
                             run_id=run_id # pass None to start a new run
-                            )
+                            ):
             mlflow.log_metric('FF',report['ff_rel'])
             mlflow.log_metric('LUT',report['lut_rel'])
             mlflow.log_metric('BRAM',report['bram_rel'])
